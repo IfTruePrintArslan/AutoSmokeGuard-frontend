@@ -1,5 +1,126 @@
 import { useSelector } from 'react-redux'
 import '../styles/dashboard.css'
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  ComposedChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+} from 'recharts'
+
+/* ── Dummy data ── */
+
+const detectionData = [
+  { day: 'May 1',  detections: 6,  high: 1 },
+  { day: 'May 2',  detections: 7,  high: 1 },
+  { day: 'May 3',  detections: 8,  high: 2 },
+  { day: 'May 4',  detections: 7,  high: 1 },
+  { day: 'May 5',  detections: 9,  high: 2 },
+  { day: 'May 6',  detections: 10, high: 2 },
+  { day: 'May 7',  detections: 9,  high: 2 },
+  { day: 'May 8',  detections: 11, high: 2 },
+  { day: 'May 9',  detections: 10, high: 2 },
+  { day: 'May 10', detections: 12, high: 2 },
+  { day: 'May 11', detections: 11, high: 3 },
+  { day: 'May 12', detections: 13, high: 2 },
+  { day: 'May 13', detections: 12, high: 3 },
+  { day: 'May 14', detections: 14, high: 3 },
+  { day: 'May 15', detections: 13, high: 3 },
+  { day: 'May 16', detections: 15, high: 3 },
+  { day: 'May 17', detections: 14, high: 3 },
+  { day: 'May 18', detections: 16, high: 4 },
+  { day: 'May 19', detections: 15, high: 3 },
+  { day: 'May 20', detections: 17, high: 4 },
+  { day: 'May 21', detections: 16, high: 4 },
+  { day: 'May 22', detections: 18, high: 4 },
+  { day: 'May 23', detections: 17, high: 4 },
+  { day: 'May 24', detections: 19, high: 5 },
+  { day: 'May 25', detections: 18, high: 4 },
+  { day: 'May 26', detections: 20, high: 5 },
+  { day: 'May 27', detections: 19, high: 5 },
+  { day: 'May 28', detections: 14, high: 3 },
+  { day: 'May 29', detections: 21, high: 5 },
+  { day: 'May 30', detections: 22, high: 6 },
+]
+
+const donutData = [
+  { name: 'Low',      value: 149, color: '#4ade80' },
+  { name: 'Moderate', value: 67,  color: '#fbbf24' },
+  { name: 'High',     value: 32,  color: '#f87171' },
+]
+const DONUT_TOTAL = 248
+
+const sparkTotal    = [6,7,8,7,9,10,11,13,14,16,17,19,21,22].map((v) => ({ v }))
+const sparkHigh     = [4,5,4,5,3,4,4,3,3,2,2,2,1,2].map((v) => ({ v }))
+const sparkReports  = [3,4,4,5,6,6,7,8,9,10,11,12,14,15].map((v) => ({ v }))
+const sparkConf     = [82,83,83,84,85,85,86,87,87,88,89,90,90,91].map((v) => ({ v }))
+
+/* ── Custom tooltips ── */
+
+function CustomLineTooltip({ active, payload, label }) {
+  if (!active || !payload || !payload.length) return null
+  const det = payload.find((p) => p.dataKey === 'detections')
+  const hi  = payload.find((p) => p.dataKey === 'high')
+  return (
+    <div
+      style={{
+        background: '#1a1a1a',
+        border: '1px solid #2e2e2e',
+        borderRadius: '8px',
+        padding: '8px 10px',
+        fontFamily: 'var(--font)',
+        minWidth: '130px',
+      }}
+    >
+      <div style={{ fontSize: '11px', color: '#a3a3a3', fontWeight: 600, marginBottom: '5px' }}>
+        {label}
+      </div>
+      {det && (
+        <div style={{ fontSize: '12px', color: '#ededed' }}>
+          {det.value} detections
+        </div>
+      )}
+      {hi && (
+        <div style={{ fontSize: '12px', color: '#f87171' }}>
+          {hi.value} high
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CustomDonutTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null
+  const item = payload[0]
+  const pct = Math.round((item.value / DONUT_TOTAL) * 100)
+  return (
+    <div
+      style={{
+        background: '#1a1a1a',
+        border: '1px solid #2e2e2e',
+        borderRadius: '8px',
+        padding: '8px 10px',
+        fontFamily: 'var(--font)',
+        fontSize: '12px',
+        color: '#ededed',
+      }}
+    >
+      <span style={{ color: item.payload.color, fontWeight: 600 }}>{item.name}</span>
+      {' · '}
+      {item.value}
+      {' · '}
+      {pct}%
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const user = useSelector((s) => s.auth.user)
@@ -27,9 +148,11 @@ export default function DashboardPage() {
           </div>
           <div className="kpi-row">
             <div className="kpi-val mono">248</div>
-            <svg width="92" height="30" viewBox="0 0 92 30" fill="none">
-              <polyline points="2,24 14,20 26,22 38,15 50,17 62,10 74,12 86,5" stroke="#fafafa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <ResponsiveContainer width={92} height={34}>
+              <LineChart data={sparkTotal}>
+                <Line type="monotone" dataKey="v" dot={false} strokeWidth={1.5} stroke="#fafafa" isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
@@ -41,9 +164,11 @@ export default function DashboardPage() {
           </div>
           <div className="kpi-row">
             <div className="kpi-val mono">32</div>
-            <svg width="92" height="30" viewBox="0 0 92 30" fill="none">
-              <polyline points="2,10 14,14 26,9 38,16 50,12 62,18 74,15 86,21" stroke="#f87171" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <ResponsiveContainer width={92} height={34}>
+              <LineChart data={sparkHigh}>
+                <Line type="monotone" dataKey="v" dot={false} strokeWidth={1.5} stroke="#f87171" isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
@@ -55,9 +180,11 @@ export default function DashboardPage() {
           </div>
           <div className="kpi-row">
             <div className="kpi-val mono">196</div>
-            <svg width="92" height="30" viewBox="0 0 92 30" fill="none">
-              <polyline points="2,22 14,18 26,20 38,14 50,16 62,11 74,13 86,6" stroke="#fafafa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <ResponsiveContainer width={92} height={34}>
+              <LineChart data={sparkReports}>
+                <Line type="monotone" dataKey="v" dot={false} strokeWidth={1.5} stroke="#fafafa" isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
@@ -69,9 +196,11 @@ export default function DashboardPage() {
           </div>
           <div className="kpi-row">
             <div className="kpi-val mono">0.91</div>
-            <svg width="92" height="30" viewBox="0 0 92 30" fill="none">
-              <polyline points="2,18 14,16 26,17 38,13 50,14 62,10 74,11 86,8" stroke="#a3a3a3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <ResponsiveContainer width={92} height={34}>
+              <LineChart data={sparkConf}>
+                <Line type="monotone" dataKey="v" dot={false} strokeWidth={1.5} stroke="#a3a3a3" isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
@@ -93,43 +222,43 @@ export default function DashboardPage() {
               <span>1y</span>
             </div>
           </div>
-          <svg className="chart" viewBox="0 0 760 230" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#fafafa" stopOpacity=".25" />
-                <stop offset="1" stopColor="#fafafa" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <line x1="0" x2="760" y1="46"  y2="46"  stroke="rgba(148,163,184,.08)" />
-            <line x1="0" x2="760" y1="86"  y2="86"  stroke="rgba(148,163,184,.08)" />
-            <line x1="0" x2="760" y1="126" y2="126" stroke="rgba(148,163,184,.08)" />
-            <line x1="0" x2="760" y1="166" y2="166" stroke="rgba(148,163,184,.08)" />
-            <line x1="0" x2="760" y1="206" y2="206" stroke="rgba(148,163,184,.08)" />
-            <path
-              d="M0,170 C40,160 60,135 100,140 C140,145 160,120 200,118 C240,116 260,135 300,128 C340,121 360,90 400,95 C440,100 460,80 500,74 C540,68 560,90 600,82 C640,74 660,55 700,50 C730,46 745,42 760,40 L760,230 L0,230 Z"
-              fill="rgba(250,250,250,.07)"
-            />
-            <path
-              d="M0,170 C40,160 60,135 100,140 C140,145 160,120 200,118 C240,116 260,135 300,128 C340,121 360,90 400,95 C440,100 460,80 500,74 C540,68 560,90 600,82 C640,74 660,55 700,50 C730,46 745,42 760,40"
-              fill="none"
-              stroke="#fafafa"
-              strokeWidth="2.2"
-            />
-            <path
-              d="M0,205 C50,202 80,195 130,196 C180,197 220,188 270,190 C320,192 360,180 410,182 C460,184 510,172 560,174 C610,176 660,162 710,164 C735,165 750,160 760,158"
-              fill="none"
-              stroke="#f87171"
-              strokeWidth="1.8"
-              strokeDasharray="1 0"
-              opacity=".85"
-            />
-            <circle cx="500" cy="74" r="4" fill="#1f1f1f" stroke="#fafafa" strokeWidth="2.2" />
-            <g transform="translate(430,18)">
-              <rect width="148" height="40" rx="9" fill="#1f1f1f" stroke="rgba(148,163,184,.2)" />
-              <text x="12" y="17" fill="#a3a3a3" fontSize="10" fontFamily="Plus Jakarta Sans">May 28</text>
-              <text x="12" y="31" fill="#ededed" fontSize="11.5" fontWeight="600" fontFamily="Plus Jakarta Sans">14 detections · 3 high</text>
-            </g>
-          </svg>
+          <div className="chart">
+            <ResponsiveContainer width="100%" height={230}>
+              <ComposedChart data={detectionData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+                <defs>
+                  <linearGradient id="detGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#fafafa" stopOpacity={0.10} />
+                    <stop offset="100%" stopColor="#fafafa" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} stroke="#232323" />
+                <XAxis dataKey="day" hide />
+                <YAxis hide />
+                <Tooltip
+                  content={<CustomLineTooltip />}
+                  cursor={{ stroke: '#2e2e2e' }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="detections"
+                  stroke="#fafafa"
+                  strokeWidth={2}
+                  fill="url(#detGradient)"
+                  dot={false}
+                  activeDot={{ r: 4, fill: '#fafafa', stroke: '#0a0a0a', strokeWidth: 2 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="high"
+                  stroke="#f87171"
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  activeDot={{ r: 3, fill: '#f87171', stroke: '#0a0a0a', strokeWidth: 2 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
           <div className="legend">
             <span><i style={{ background: '#fafafa' }}></i>All detections</span>
             <span><i style={{ background: '#f87171' }}></i>High severity</span>
@@ -145,14 +274,41 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="donut-wrap">
-            <svg width="172" height="172" viewBox="0 0 172 172">
-              <circle cx="86" cy="86" r="68" fill="none" stroke="rgba(148,163,184,.09)" strokeWidth="17" />
-              <circle cx="86" cy="86" r="68" fill="none" stroke="#4ade80" strokeWidth="17" strokeDasharray="256 427" strokeDashoffset="0" strokeLinecap="round" transform="rotate(-90 86 86)" />
-              <circle cx="86" cy="86" r="68" fill="none" stroke="#f59e0b" strokeWidth="17" strokeDasharray="112 427" strokeDashoffset="-264" strokeLinecap="round" transform="rotate(-90 86 86)" />
-              <circle cx="86" cy="86" r="68" fill="none" stroke="#f87171" strokeWidth="17" strokeDasharray="47 427" strokeDashoffset="-384" strokeLinecap="round" transform="rotate(-90 86 86)" />
-              <text x="86" y="82" textAnchor="middle" fill="#ededed" fontSize="27" fontWeight="650" fontFamily="Plus Jakarta Sans">248</text>
-              <text x="86" y="101" textAnchor="middle" fill="#a3a3a3" fontSize="11" fontFamily="Plus Jakarta Sans">analyses</text>
-            </svg>
+            <div style={{ position: 'relative', width: 172, height: 172, flexShrink: 0 }}>
+              <PieChart width={172} height={172}>
+                <Pie
+                  data={donutData}
+                  cx={86}
+                  cy={86}
+                  innerRadius={58}
+                  outerRadius={80}
+                  paddingAngle={2}
+                  dataKey="value"
+                  stroke="none"
+                  startAngle={90}
+                  endAngle={-270}
+                >
+                  {donutData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip content={<CustomDonutTooltip />} />
+              </PieChart>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  textAlign: 'center',
+                  pointerEvents: 'none',
+                  lineHeight: 1.2,
+                }}
+              >
+                <div style={{ fontSize: '26px', fontWeight: 650, color: '#ededed', fontFamily: 'var(--font)', letterSpacing: '-.03em' }}>248</div>
+                <div style={{ fontSize: '11px', color: '#6f6f6f', fontFamily: 'var(--font)' }}>analyses</div>
+              </div>
+            </div>
             <div className="donut-legend">
               <div>
                 <span className="sev sev-low"><i></i>Low</span>

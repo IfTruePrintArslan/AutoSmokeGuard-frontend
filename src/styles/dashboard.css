@@ -248,6 +248,12 @@ tr:last-child td {
   margin: 14px 18px 0;
 }
 
+/* Kill Recharts focus outlines */
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}
+
 .legend {
   display: flex;
   gap: 18px;
