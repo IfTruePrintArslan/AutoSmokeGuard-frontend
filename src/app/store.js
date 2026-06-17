@@ -1,11 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit'
 import uiReducer from '../features/ui/uiSlice'
+import authReducer from '../features/auth/authSlice'
 
-// Auth slice will be added in a later task — reserve the 'auth' key here.
 const store = configureStore({
   reducer: {
     ui: uiReducer,
-    // auth: authReducer,  <-- placeholder for future authSlice
+    auth: authReducer,
   },
 })
 
