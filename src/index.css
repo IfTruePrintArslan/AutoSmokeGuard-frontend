@@ -1,11 +1,66 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('./assets/fonts/plus-jakarta-sans.woff2') format('woff2-variations');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: block;
+}
+
+@theme {
+  /* Colors */
+  --color-bg: #0a0a0a;
+  --color-bg-2: #101010;
+  --color-surface: #141414;
+  --color-surface-2: #1a1a1a;
+  --color-line: #232323;
+  --color-line-2: #2e2e2e;
+  --color-text: #ededed;
+  --color-text-2: #a3a3a3;
+  --color-text-3: #8a8a8a;
+  --color-muted: #6f6f6f;
+  --color-accent: #fafafa;
+  --color-accent-deep: #e5e5e5;
+
+  /* Severity */
+  --color-high: #f87171;
+  --color-mod: #fbbf24;
+  --color-low: #4ade80;
+
+  /* Font */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Radius */
+  --radius-card: 14px;
+}
+
+/* Severity translucent backgrounds — kept as plain CSS vars (rgba not well-suited for @theme) */
+:root {
+  --high-bg: rgba(248, 113, 113, 0.10);
+  --mod-bg: rgba(251, 191, 36, 0.10);
+  --low-bg: rgba(74, 222, 128, 0.10);
+  --accent-glow: rgba(255, 255, 255, 0.07);
+}
+
+/* Base reset */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+svg text {
+  font-family: var(--font-sans);
 }
