@@ -1,4 +1,6 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { useDispatch, useSelector } from 'react-redux'
+import { logout } from '../../features/auth/authSlice'
 
 /* ---------- SVG Icons (verbatim from 02_dashboard.html, JSX-ified) ---------- */
 
@@ -64,6 +66,16 @@ function IconSettings() {
   )
 }
 
+function IconLogout() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  )
+}
+
 /* ---------- NavLink helper ---------- */
 function SideNavLink({ to, icon, children, badge }) {
   return (
@@ -93,6 +105,26 @@ function SideNavLink({ to, icon, children, badge }) {
 
 /* ---------- Sidebar ---------- */
 export default function Sidebar() {
+  const dispatch = useDispatch()
+  const navigate = useNavigate()
+  const user = useSelector((state) => state.auth.user)
+
+  // Derive display values — fall back to static placeholder if no user
+  const displayName = user?.name || 'Memoon Ahmed'
+  const displaySub = user?.email || 'Transport Authority'
+  // Avatar initials: up to 2 chars from name
+  const initials = displayName
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
+  function handleLogout() {
+    dispatch(logout())
+    navigate('/login')
+  }
+
   return (
     <aside
       style={{
@@ -107,12 +139,10 @@ export default function Sidebar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-[10px] px-[10px] pb-[22px] pt-[4px]">
-        {/* logo-mark: white 34px rounded-10px square with shield+check SVG */}
         <div
           className="flex items-center justify-center rounded-[10px] bg-[#fafafa]"
           style={{ width: '34px', height: '34px', flexShrink: 0 }}
         >
-          {/* Shield + check from 01_login.html / 02_dashboard.html */}
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 2 4 5.5v5.2c0 4.9 3.4 9.5 8 10.8 4.6-1.3 8-5.9 8-10.8V5.5z" />
             <path d="m9 12 2 2 4-4.5" />
@@ -174,7 +204,7 @@ export default function Sidebar() {
           </p>
         </div>
 
-        {/* User card */}
+        {/* User card with logout button */}
         <div
           className="flex items-center gap-[10px] p-[10px] rounded-[10px]"
           style={{
@@ -186,12 +216,41 @@ export default function Sidebar() {
             className="flex items-center justify-center rounded-full text-[12px] font-semibold text-white"
             style={{ width: '32px', height: '32px', background: '#3a3a3a', flexShrink: 0 }}
           >
-            MA
+            {initials}
           </div>
-          <div>
-            <b className="block text-[12.5px] font-semibold">Memoon Ahmed</b>
-            <span className="text-[11px] text-[#6f6f6f]">Transport Authority</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <b className="block text-[12.5px] font-semibold truncate">{displayName}</b>
+            <span className="text-[11px] text-[#6f6f6f] truncate block">{displaySub}</span>
           </div>
+          {/* Logout icon button */}
+          <button
+            onClick={handleLogout}
+            title="Sign out"
+            style={{
+              flexShrink: 0,
+              width: '28px',
+              height: '28px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'transparent',
+              border: '1px solid var(--color-line)',
+              borderRadius: '7px',
+              color: 'var(--color-muted)',
+              cursor: 'pointer',
+              transition: 'color 0.15s, border-color 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#f87171'
+              e.currentTarget.style.borderColor = 'rgba(248,113,113,0.3)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--color-muted)'
+              e.currentTarget.style.borderColor = 'var(--color-line)'
+            }}
+          >
+            <IconLogout />
+          </button>
         </div>
       </div>
     </aside>
