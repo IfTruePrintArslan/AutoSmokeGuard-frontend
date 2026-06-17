@@ -13,7 +13,7 @@ export default function AppLayout() {
      */
     <div
       className="flex"
-      style={{ minHeight: '100vh', background: 'var(--color-bg)' }}
+      style={{ height: '100vh', overflow: 'hidden', background: 'var(--color-bg)' }}
     >
       <Sidebar />
 
