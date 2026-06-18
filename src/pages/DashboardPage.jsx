@@ -103,7 +103,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPI stat cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
 
         {/* Total analyses */}
         <div className="card py-4 px-[18px]">
@@ -172,7 +172,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Row 2: line chart + donut chart ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 mb-4 items-stretch">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-4 mb-4 items-stretch">
 
         {/* Detections over time */}
         <div className="card flex flex-col">
@@ -231,7 +231,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Severity distribution donut */}
-        <div className="h-[320px] lg:h-full">
+        <div className="h-[320px] xl:h-full">
           <SeverityDistribution className="h-full" />
         </div>
 
@@ -242,10 +242,10 @@ export default function DashboardPage() {
           lets every column shrink, so the row never overflows past the right
           edge). <lg : Recent analyses spans full width, the two queue cards
           drop below it (2-col at md, 1-col on mobile). */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)_minmax(0,300px)] gap-4 items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)_minmax(0,300px)] gap-4 items-stretch">
 
         {/* Recent analyses */}
-        <div className="card md:col-span-2 lg:col-span-1 overflow-hidden">
+        <div className="card md:col-span-2 xl:col-span-1 overflow-hidden">
           <div className="card-head">
             <h3>Recent analyses</h3>
             <a className="link" href="#">View all →</a>

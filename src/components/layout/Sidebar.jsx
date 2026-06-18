@@ -150,7 +150,7 @@ export default function Sidebar() {
         'fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out',
         mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
         // lg+ : static in-flow rail
-        'lg:static lg:translate-x-0 lg:z-auto',
+        'dk:static dk:translate-x-0 dk:z-auto',
       ].join(' ')}
       style={{
         borderRight: '1px solid var(--color-line)',
