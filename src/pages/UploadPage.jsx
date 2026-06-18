@@ -1,4 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useSelector, useDispatch } from 'react-redux'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '../components/ui/select'
+import { Slider } from '../components/ui/slider'
+import { Switch } from '../components/ui/switch'
+import SeverityDistribution from '../components/SeverityDistribution'
+import { setSetting } from '../features/analysis/analysisSlice'
 
 /* ─────────────────────────────────────────────
    Constants & validation
@@ -40,48 +52,6 @@ function fmtSize(bytes) {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
-
-/* ─────────────────────────────────────────────
-   Demo / seed rows shown on initial render
-   (status is a string — 'ok' | 'run' | 'q' | 'err')
-───────────────────────────────────────────── */
-
-const SEED_FILES = [
-  {
-    id: '__seed_1',
-    name: 'traffic_cam_03.mp4',
-    sizeLabel: '128 MB',
-    sizeMB: 128,
-    status: 'ok',
-    progress: 100,
-    sub: 'Uploaded · ready for analysis',
-    barColor: 'var(--low)',
-    seed: true,
-  },
-  {
-    id: '__seed_2',
-    name: 'junction_n4_dusk.mp4',
-    sizeLabel: '96 MB',
-    sizeMB: 96,
-    status: 'run',
-    progress: 64,
-    sub: 'Uploading… 64% · 1.2 MB/s',
-    barColor: '#e5e5e5',
-    seed: true,
-  },
-  {
-    id: '__seed_3',
-    name: 'highway_e2_0610.avi',
-    sizeLabel: '88 MB',
-    sizeMB: 88,
-    status: 'q',
-    progress: 0,
-    sub: 'Queued',
-    barColor: '#e5e5e5',
-    dim: true,
-    seed: true,
-  },
-]
 
 /* ─────────────────────────────────────────────
    Inline SVG icons — verbatim from mockup
@@ -152,43 +122,17 @@ function FileRow({ entry, onRemove }) {
         )}
       </div>
 
-      {/* remove — only on real (non-seed) rows */}
-      {!entry.seed && (
-        <button
-          className="bg-transparent border-none text-muted cursor-pointer text-[14px] leading-none py-1 px-1.5 rounded-[6px] flex-shrink-0 mt-0.5 transition-colors font-sans hover:text-high hover:bg-high-bg"
-          type="button"
-          title="Remove"
-          onClick={() => onRemove(entry.id)}
-        >
-          ×
-        </button>
-      )}
+      {/* remove */}
+      <button
+        className="w-[28px] h-[28px] flex-shrink-0 self-center inline-flex items-center justify-center bg-transparent border border-line-2 text-muted cursor-pointer text-[15px] leading-none rounded-[7px] transition-colors font-sans hover:text-high hover:border-high hover:bg-high-bg"
+        type="button"
+        title="Remove"
+        aria-label={`Remove ${entry.name}`}
+        onClick={() => onRemove(entry.id)}
+      >
+        ×
+      </button>
     </div>
-  )
-}
-
-/* ─────────────────────────────────────────────
-   Switch toggle
-───────────────────────────────────────────── */
-
-function Switch({ on, onToggle }) {
-  return (
-    <button
-      type="button"
-      className={
-        'w-[36px] h-[21px] rounded-[99px] relative flex-shrink-0 cursor-pointer border-none p-0 ' +
-        (on ? 'bg-[#fafafa]' : 'bg-[rgba(148,163,184,0.25)]')
-      }
-      onClick={onToggle}
-      aria-pressed={on}
-    >
-      <i
-        className={
-          'absolute top-[2.5px] w-[16px] h-[16px] rounded-[99px] block transition-[left,background] duration-[150ms] ease-in-out ' +
-          (on ? 'left-[17px] bg-[#0a0a0a]' : 'left-[3px] bg-[#cbd5e1]')
-        }
-      />
-    </button>
   )
 }
 
@@ -197,14 +141,21 @@ function Switch({ on, onToggle }) {
 ───────────────────────────────────────────── */
 
 export default function UploadPage() {
-  // real user-added files (seed rows are separate + static display)
+  // real user-added files — queue starts empty
   const [userFiles, setUserFiles] = useState([])
   const [dragOver, setDragOver]   = useState(false)
 
-  // settings toggles
-  const [pdfReport,   setPdfReport]   = useState(true)
-  const [plateRedact, setPlateRedact] = useState(true)
-  const [nightMode,   setNightMode]   = useState(false)
+  // analysis settings — global Redux state
+  const dispatch = useDispatch()
+  const settings = useSelector((s) => s.analysis.settings)
+  const {
+    model,
+    frameSampling,
+    sensitivity,
+    autoPdf,
+    plateRedaction,
+    nightMode,
+  } = settings
 
   const inputRef  = useRef(null)
   const timersRef = useRef({})
@@ -312,22 +263,18 @@ export default function UploadPage() {
 
   const openPicker = () => inputRef.current?.click()
 
-  /* ── Queue stats ── */
-  const allRows   = [...SEED_FILES, ...userFiles]
-  // count: seed 3 + user non-error rows
-  const fileCount = 3 + userFiles.filter((e) => e.status !== 'err').length
-  // total MB: seed fixed + real sizes
-  const totalMB   = 312 + userFiles
+  /* ── Queue stats (real queue only) ── */
+  const fileCount  = userFiles.filter((e) => e.status !== 'err').length
+  const totalBytes = userFiles
     .filter((e) => e.status !== 'err')
-    .reduce((acc, e) => acc + (e.rawSize || 0) / (1024 * 1024), 0)
-  const totalLabel =
-    totalMB < 1024 ? `${Math.round(totalMB)} MB` : `${(totalMB / 1024).toFixed(1)} GB`
+    .reduce((acc, e) => acc + (e.rawSize || 0), 0)
+  const totalLabel = fmtSize(totalBytes)
 
-  // ready files (seed 1 is "ok", user 'ok' rows)
-  const readyCount = 1 + userFiles.filter((e) => e.status === 'ok').length
+  // ready files = fully-uploaded user rows
+  const readyCount = userFiles.filter((e) => e.status === 'ok').length
 
   return (
-    <>
+    <div className="h-full flex flex-col">
       {/* Page header */}
       <div className="page-head">
         <div>
@@ -350,9 +297,9 @@ export default function UploadPage() {
         }}
       />
 
-      <div className="grid grid-cols-[1fr_372px] gap-4">
+      <div className="grid grid-cols-[1fr_372px] gap-4 flex-1 min-h-0">
         {/* ── LEFT column ── */}
-        <div>
+        <div className="flex flex-col min-h-0">
           {/* Dropzone */}
           <div
             className="card p-2.5 cursor-pointer"
@@ -398,43 +345,56 @@ export default function UploadPage() {
           </div>
 
           {/* Upload queue */}
-          <div className="card mt-4">
+          <div className="card mt-4 flex flex-col flex-1 min-h-0">
             <div className="card-head">
               <h3>Upload queue</h3>
               <span className="text-[12px] text-text-2">
-                {fileCount} file{fileCount !== 1 ? 's' : ''} · {totalLabel} total
+                {fileCount} file{fileCount !== 1 ? 's' : ''}
+                {fileCount > 0 ? ` · ${totalLabel} total` : ''}
               </span>
             </div>
-            <div className="pt-2 pb-4 px-[18px] flex flex-col gap-4">
-              {/* Seed rows — always rendered first */}
-              {SEED_FILES.map((entry) => (
-                <FileRow key={entry.id} entry={entry} onRemove={removeFile} />
-              ))}
-              {/* Real user-added rows */}
-              {userFiles.map((entry) => (
-                <FileRow key={entry.id} entry={entry} onRemove={removeFile} />
-              ))}
+            <div className="pt-2 pb-4 px-[18px] flex flex-col gap-4 overflow-y-auto flex-1">
+              {userFiles.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center text-[13px] text-muted py-10">
+                  No files added yet.
+                </div>
+              ) : (
+                userFiles.map((entry) => (
+                  <FileRow key={entry.id} entry={entry} onRemove={removeFile} />
+                ))
+              )}
             </div>
           </div>
         </div>
 
-        {/* ── RIGHT column — Analysis settings ── */}
+        {/* ── RIGHT column — Analysis settings + severity widget ── */}
+        <div className="flex flex-col min-h-0 gap-4">
         <div className="card">
           <div className="card-head">
             <h3>Analysis settings</h3>
           </div>
           <div className="pt-1.5 pb-[18px] px-[18px]">
             <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Detection model</label>
-            <div className="h-10 border border-line-2 rounded-[9px] bg-bg-2 flex items-center px-[13px] text-[13px] text-text">
-              YOLOv8-seg · v2.3 <i className="ml-auto not-italic text-muted text-[11px]">▾</i>
-            </div>
+            <Select value={model} onValueChange={(v) => dispatch(setSetting({ key: 'model', value: v }))}>
+              <SelectTrigger aria-label="Detection model">
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="yolov8-2.3">YOLOv8-seg · v2.3</SelectItem>
+                <SelectItem value="yolov11-3.0">YOLOv11-seg · v3.0</SelectItem>
+                <SelectItem value="rtdetr-1.2">RT-DETR · v1.2</SelectItem>
+              </SelectContent>
+            </Select>
 
             <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Smoke sensitivity</label>
             <div className="pt-1.5 px-0.5">
-              <div className="h-[5px] rounded-[99px] bg-[rgba(148,163,184,0.15)] relative">
-                <i className="absolute left-0 top-0 h-full rounded-[99px] bg-[#e5e5e5] block" style={{ width: '68%' }} />
-                <span className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-[15px] h-[15px] rounded-[99px] bg-[#fafafa] shadow-[0_0_0_4px_rgba(255,255,255,0.25)]" style={{ left: '68%' }} />
-              </div>
+              <Slider
+                value={[sensitivity]}
+                onValueChange={(v) => dispatch(setSetting({ key: 'sensitivity', value: v[0] }))}
+                min={0}
+                max={100}
+                step={1}
+              />
               <div className="flex justify-between text-[10.5px] text-muted mt-[9px]">
                 <span>Low</span>
                 <span>Balanced</span>
@@ -443,9 +403,17 @@ export default function UploadPage() {
             </div>
 
             <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Frame sampling</label>
-            <div className="h-10 border border-line-2 rounded-[9px] bg-bg-2 flex items-center px-[13px] text-[13px] text-text">
-              Every 5th frame <i className="ml-auto not-italic text-muted text-[11px]">▾</i>
-            </div>
+            <Select value={frameSampling} onValueChange={(v) => dispatch(setSetting({ key: 'frameSampling', value: v }))}>
+              <SelectTrigger aria-label="Frame sampling">
+                <SelectValue placeholder="Select sampling" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="every">Every frame</SelectItem>
+                <SelectItem value="every5">Every 5th frame</SelectItem>
+                <SelectItem value="every10">Every 10th frame</SelectItem>
+                <SelectItem value="every30">Every 30th frame</SelectItem>
+              </SelectContent>
+            </Select>
 
             <div className="mt-[22px] flex flex-col gap-[15px]">
               <div className="flex items-center justify-between gap-3">
@@ -453,27 +421,33 @@ export default function UploadPage() {
                   <b className="text-[12.5px] font-[550] block">Auto-generate PDF report</b>
                   <span className="text-[11px] text-muted">Create report when analysis completes</span>
                 </div>
-                <Switch on={pdfReport} onToggle={() => setPdfReport((v) => !v)} />
+                <Switch checked={autoPdf} onCheckedChange={(v) => dispatch(setSetting({ key: 'autoPdf', value: v }))} aria-label="Auto-generate PDF report" />
               </div>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <b className="text-[12.5px] font-[550] block">License plate redaction</b>
                   <span className="text-[11px] text-muted">Blur plates in exported frames</span>
                 </div>
-                <Switch on={plateRedact} onToggle={() => setPlateRedact((v) => !v)} />
+                <Switch checked={plateRedaction} onCheckedChange={(v) => dispatch(setSetting({ key: 'plateRedaction', value: v }))} aria-label="License plate redaction" />
               </div>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <b className="text-[12.5px] font-[550] block">Night-mode enhancement</b>
                   <span className="text-[11px] text-muted">Boost contrast for low-light footage</span>
                 </div>
-                <Switch on={nightMode} onToggle={() => setNightMode((v) => !v)} />
+                <Switch checked={nightMode} onCheckedChange={(v) => dispatch(setSetting({ key: 'nightMode', value: v }))} aria-label="Night-mode enhancement" />
               </div>
             </div>
 
             <button
-              className="btn btn-pri w-full h-[42px] justify-center mt-[22px]"
+              className="btn btn-pri w-full h-[42px] justify-center mt-[22px] disabled:opacity-50 disabled:cursor-not-allowed"
               type="button"
+              disabled={readyCount === 0}
+              onClick={() =>
+                alert(
+                  `Starting analysis on ${readyCount} file${readyCount !== 1 ? 's' : ''}.`
+                )
+              }
             >
               Start analysis
             </button>
@@ -485,7 +459,10 @@ export default function UploadPage() {
             </p>
           </div>
         </div>
+
+        <SeverityDistribution className="flex-1" />
+        </div>
       </div>
-    </>
+    </div>
   )
 }
