@@ -11,6 +11,7 @@ import {
   LineChart,
 } from 'recharts'
 import SeverityDistribution from '../components/SeverityDistribution'
+import UploadQueue from '../components/UploadQueue'
 
 /* ── Dummy data ── */
 
@@ -91,7 +92,7 @@ export default function DashboardPage() {
   const firstName = user?.name?.split(' ')[0] || 'Memoon'
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex flex-col">
       {/* ── Page header ── */}
       <div className="page-head">
         <div>
@@ -102,7 +103,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPI stat cards ── */}
-      <div className="grid grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
 
         {/* Total analyses */}
         <div className="card py-4 px-[18px]">
@@ -171,7 +172,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Row 2: line chart + donut chart ── */}
-      <div className="grid grid-cols-[1fr_380px] gap-4 mb-4 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 mb-4 items-stretch">
 
         {/* Detections over time */}
         <div className="card flex flex-col">
@@ -186,7 +187,7 @@ export default function DashboardPage() {
               <span className="text-[11.5px] py-[5px] px-[11px] text-text-2">1y</span>
             </div>
           </div>
-          <div className="w-[calc(100%-36px)] flex-1 min-h-[230px] mt-3.5 mx-[18px]">
+          <div className="w-[calc(100%-36px)] h-[300px] mt-3.5 mx-[18px]">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={detectionData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
                 <defs>
@@ -230,21 +231,27 @@ export default function DashboardPage() {
         </div>
 
         {/* Severity distribution donut */}
-        <div className="min-h-0">
+        <div className="h-[320px] lg:h-full">
           <SeverityDistribution className="h-full" />
         </div>
 
       </div>
 
-      {/* ── Row 3: recent analyses table + processing queue ── */}
-      <div className="grid grid-cols-[1fr_380px] gap-4 items-stretch">
+      {/* ── Row 3: recent analyses table + upload queue + processing queue ──
+          lg+ : three columns that fit within the content width (minmax(0,…)
+          lets every column shrink, so the row never overflows past the right
+          edge). <lg : Recent analyses spans full width, the two queue cards
+          drop below it (2-col at md, 1-col on mobile). */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)_minmax(0,300px)] gap-4 items-stretch">
 
         {/* Recent analyses */}
-        <div className="card">
+        <div className="card md:col-span-2 lg:col-span-1 overflow-hidden">
           <div className="card-head">
             <h3>Recent analyses</h3>
             <a className="link" href="#">View all →</a>
           </div>
+          {/* horizontal-scroll wrapper so columns don't crush on mobile */}
+          <div className="overflow-x-auto">
           <table style={{ marginTop: '8px' }}>
             <tbody>
               <tr>
@@ -290,7 +297,11 @@ export default function DashboardPage() {
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
+
+        {/* Upload queue — shared, Redux-backed widget (same data as Upload page) */}
+        <UploadQueue />
 
         {/* Processing queue */}
         <div className="card">

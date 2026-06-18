@@ -1,4 +1,6 @@
 import { useLocation } from 'react-router-dom'
+import { useDispatch } from 'react-redux'
+import { openMobileNav } from '../../features/ui/uiSlice'
 
 const PAGE_LABELS = {
   '/dashboard': 'Dashboard',
@@ -11,28 +13,43 @@ const PAGE_LABELS = {
 
 export default function Topbar() {
   const { pathname } = useLocation()
+  const dispatch = useDispatch()
   const label = PAGE_LABELS[pathname] ?? 'Dashboard'
 
   return (
     <div
-      className="flex items-center gap-[14px] flex-shrink-0"
+      className="flex items-center gap-[14px] flex-shrink-0 px-4 sm:px-5 lg:px-7"
       style={{
         height: '64px',
         borderBottom: '1px solid var(--color-line)',
-        padding: '0 28px',
         background: 'var(--color-bg)',
       }}
     >
+      {/* Hamburger — opens the off-canvas drawer (<lg only) */}
+      <button
+        type="button"
+        onClick={() => dispatch(openMobileNav())}
+        aria-label="Open navigation menu"
+        className="lg:hidden flex items-center justify-center w-9 h-9 flex-shrink-0 rounded-[9px] border border-line-2 bg-[#141414] text-[#a3a3a3]"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
+
       {/* Breadcrumb */}
-      <div className="text-[12.5px] text-[#a3a3a3]">
-        Workspace / <b className="text-[#ededed] font-semibold">{label}</b>
+      <div className="text-[12.5px] text-[#a3a3a3] truncate">
+        <span className="hidden sm:inline">Workspace / </span>
+        <b className="text-[#ededed] font-semibold">{label}</b>
       </div>
 
-      {/* Search — margin-left auto pushes it right */}
+      {/* Search — full box on lg+, icon-only button below lg.
+          ml-auto pushes the right-hand cluster to the edge. */}
       <div
-        className="flex items-center gap-[9px] text-[#6f6f6f] text-[13px]"
+        className="hidden lg:flex items-center gap-[9px] text-[#6f6f6f] text-[13px] ml-auto"
         style={{
-          marginLeft: 'auto',
           width: '280px',
           height: '36px',
           padding: '0 12px',
@@ -59,6 +76,18 @@ export default function Topbar() {
           ⌘K
         </kbd>
       </div>
+
+      {/* Collapsed search icon-button (<lg) */}
+      <button
+        type="button"
+        aria-label="Search"
+        className="lg:hidden flex items-center justify-center w-9 h-9 flex-shrink-0 rounded-[9px] border border-line-2 bg-[#121212] text-[#6f6f6f] ml-auto"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+      </button>
 
       {/* Bell icon-btn */}
       <div
@@ -90,12 +119,11 @@ export default function Topbar() {
         />
       </div>
 
-      {/* New analysis button */}
+      {/* New analysis button — label hidden on very small widths (icon-only) */}
       <button
         className="inline-flex items-center gap-[8px] font-semibold text-[13px] cursor-pointer"
         style={{
           height: '36px',
-          padding: '0 16px',
           borderRadius: '9px',
           border: '1px solid transparent',
           background: '#fafafa',
@@ -104,10 +132,12 @@ export default function Topbar() {
           flexShrink: 0,
         }}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        New analysis
+        <span className="inline-flex items-center gap-[8px] px-3 sm:px-4 h-full">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <span className="hidden sm:inline">New analysis</span>
+        </span>
       </button>
     </div>
   )
