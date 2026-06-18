@@ -1,37 +1,42 @@
 import { Outlet } from 'react-router-dom'
+import { useDispatch, useSelector } from 'react-redux'
+import { closeMobileNav } from '../../features/ui/uiSlice'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 
 export default function AppLayout() {
+  const dispatch = useDispatch()
+  const mobileNavOpen = useSelector((s) => s.ui.mobileNavOpen)
+
   return (
     /*
-     * Full-viewport responsive adaptation:
-     * The mockup's fixed 1440x900 box becomes a min-h-screen flex row.
-     * Sidebar keeps its fixed 236px width; main column is flex-1 min-w-0.
-     * Every other visual detail (colors, borders, paddings, font sizes, radii)
-     * matches style.css exactly. This fixed→fluid change is the ONLY deviation.
+     * Responsive shell:
+     * - lg+ : fixed full-viewport box (h-screen + overflow-hidden); the 236px
+     *   sidebar rail is in-flow and the content area scrolls internally.
+     * - <lg : natural height (min-h-screen) so the whole page scrolls normally;
+     *   the sidebar is removed from flow and rendered as an off-canvas drawer.
      */
     <div
-      className="flex"
-      style={{ height: '100vh', overflow: 'hidden', background: 'var(--color-bg)' }}
+      className="flex min-h-screen lg:h-screen lg:overflow-hidden"
+      style={{ background: 'var(--color-bg)' }}
     >
       <Sidebar />
 
+      {/* Backdrop — only visible while the mobile drawer is open (<lg) */}
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+          aria-hidden="true"
+          onClick={() => dispatch(closeMobileNav())}
+        />
+      )}
+
       {/* Main column */}
-      <div
-        className="flex flex-col min-w-0"
-        style={{ flex: 1 }}
-      >
+      <div className="flex flex-col min-w-0 flex-1">
         <Topbar />
 
-        {/* Content area — scrollable */}
-        <div
-          style={{
-            flex: 1,
-            overflow: 'auto',
-            padding: '26px 28px',
-          }}
-        >
+        {/* Content area — scrollable on desktop, grows naturally on mobile */}
+        <div className="flex-1 lg:overflow-auto p-4 sm:p-5 lg:px-7 lg:py-6">
           <Outlet />
         </div>
       </div>
