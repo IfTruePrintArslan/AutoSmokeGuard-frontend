@@ -90,7 +90,7 @@ export default function SeverityDistribution({ className = '' }) {
       </div>
 
       {/* 3. Legend — single horizontal row, never shrinks */}
-      <div className="shrink-0 w-full px-[22px] pb-4 pt-2 flex justify-between gap-2">
+      <div className="shrink-0 w-full px-[22px] pb-4 pt-2 flex flex-wrap justify-between gap-x-2 gap-y-1.5">
         {items.map((entry) => (
           <div key={entry.key} className="flex items-center gap-[5px] min-w-0">
             <span

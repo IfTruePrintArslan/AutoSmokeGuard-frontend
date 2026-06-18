@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { logout } from '../../features/auth/authSlice'
+import { closeMobileNav } from '../../features/ui/uiSlice'
 
 /* ---------- SVG Icons (verbatim from 02_dashboard.html, JSX-ified) ---------- */
 
@@ -77,10 +79,11 @@ function IconLogout() {
 }
 
 /* ---------- NavLink helper ---------- */
-function SideNavLink({ to, icon, children, badge }) {
+function SideNavLink({ to, icon, children, badge, onNavigate }) {
   return (
     <NavLink
       to={to}
+      onClick={onNavigate}
       className={({ isActive }) =>
         [
           'flex items-center gap-[11px] px-[10px] py-[9px] rounded-[9px] no-underline font-medium text-[13.5px] mb-[2px] transition-colors',
@@ -108,6 +111,19 @@ export default function Sidebar() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const user = useSelector((state) => state.auth.user)
+  const mobileNavOpen = useSelector((state) => state.ui.mobileNavOpen)
+
+  const closeNav = () => dispatch(closeMobileNav())
+
+  // Esc closes the mobile drawer
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') dispatch(closeMobileNav())
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mobileNavOpen, dispatch])
 
   // Derive display values — fall back to static placeholder if no user
   const displayName = user?.name || 'Memoon Ahmed'
@@ -121,19 +137,23 @@ export default function Sidebar() {
     .toUpperCase()
 
   function handleLogout() {
+    dispatch(closeMobileNav())
     dispatch(logout())
     navigate('/login')
   }
 
   return (
     <aside
+      className={[
+        'flex flex-col w-[236px] flex-shrink-0 px-[14px] py-5',
+        // <lg : off-canvas drawer
+        'fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out',
+        mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
+        // lg+ : static in-flow rail
+        'lg:static lg:translate-x-0 lg:z-auto',
+      ].join(' ')}
       style={{
-        width: '236px',
-        flexShrink: 0,
         borderRight: '1px solid var(--color-line)',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '20px 14px',
         background: '#0e0e0e',
       }}
     >
@@ -161,19 +181,19 @@ export default function Sidebar() {
         Workspace
       </div>
       <nav className="flex flex-col">
-        <SideNavLink to="/dashboard" icon={<IconDashboard />}>
+        <SideNavLink to="/dashboard" icon={<IconDashboard />} onNavigate={closeNav}>
           Dashboard
         </SideNavLink>
-        <SideNavLink to="/upload" icon={<IconUpload />}>
+        <SideNavLink to="/upload" icon={<IconUpload />} onNavigate={closeNav}>
           Upload
         </SideNavLink>
-        <SideNavLink to="/analysis" icon={<IconAnalysis />} badge="2 running">
+        <SideNavLink to="/analysis" icon={<IconAnalysis />} badge="2 running" onNavigate={closeNav}>
           Live Analysis
         </SideNavLink>
-        <SideNavLink to="/reports" icon={<IconReports />}>
+        <SideNavLink to="/reports" icon={<IconReports />} onNavigate={closeNav}>
           Reports
         </SideNavLink>
-        <SideNavLink to="/history" icon={<IconHistory />}>
+        <SideNavLink to="/history" icon={<IconHistory />} onNavigate={closeNav}>
           History
         </SideNavLink>
       </nav>
@@ -183,7 +203,7 @@ export default function Sidebar() {
         System
       </div>
       <nav className="flex flex-col">
-        <SideNavLink to="/settings" icon={<IconSettings />}>
+        <SideNavLink to="/settings" icon={<IconSettings />} onNavigate={closeNav}>
           Settings
         </SideNavLink>
       </nav>
