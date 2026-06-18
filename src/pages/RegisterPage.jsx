@@ -3,7 +3,10 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { register } from '../features/auth/authSlice'
 import AuthHero from '../components/auth/AuthHero'
-import '../styles/auth.css'
+
+const INPUT_CLS =
+  'h-[42px] w-full border border-line-2 rounded-[9px] bg-surface flex items-center px-[14px] text-[13.5px] mb-[18px] text-text font-[inherit] outline-none transition-[border-color] duration-150 placeholder:text-muted focus:border-line-2 focus:shadow-[0_0_0_2px_rgba(250,250,250,0.06)]'
+const LABEL_CLS = 'block text-[12.5px] font-[560] mb-[7px] text-[#d4d4d4]'
 
 export default function RegisterPage() {
   const dispatch = useDispatch()
@@ -38,75 +41,75 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="login">
+    <div className="flex min-h-screen w-full bg-bg">
       <AuthHero />
 
-      <div className="l-right">
-        <div className="l-form">
-          <h1>Create your account</h1>
-          <p className="l-sub">Start analyzing vehicle emissions.</p>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="w-[380px]">
+          <h1 className="text-[24px] font-[660] tracking-[-0.02em]">Create your account</h1>
+          <p className="text-text-2 text-[13.5px] mt-[7px] mb-7">Start analyzing vehicle emissions.</p>
 
           <form onSubmit={handleSubmit} noValidate>
-            <label htmlFor="reg-name">Name</label>
+            <label htmlFor="reg-name" className={LABEL_CLS}>Name</label>
             <input
               id="reg-name"
               type="text"
-              className="input"
+              className={INPUT_CLS}
               placeholder="Hamza Khan"
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="name"
             />
 
-            <label htmlFor="reg-email">Email</label>
+            <label htmlFor="reg-email" className={LABEL_CLS}>Email</label>
             <input
               id="reg-email"
               type="email"
-              className="input"
+              className={INPUT_CLS}
               placeholder="hamza@transport.gov.pk"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
             />
 
-            <label htmlFor="reg-password">Password</label>
+            <label htmlFor="reg-password" className={LABEL_CLS}>Password</label>
             <input
               id="reg-password"
               type="password"
-              className="input"
+              className={INPUT_CLS}
               placeholder="••••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
             />
 
-            <label htmlFor="reg-confirm">Confirm password</label>
+            <label htmlFor="reg-confirm" className={LABEL_CLS}>Confirm password</label>
             <input
               id="reg-confirm"
               type="password"
-              className="input"
+              className={INPUT_CLS}
               placeholder="••••••••••"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               autoComplete="new-password"
             />
 
-            {inlineError && <p className="l-error">{inlineError}</p>}
+            {inlineError && <p className="text-[12px] text-[#f87171] mb-3 -mt-2.5">{inlineError}</p>}
 
             <button
               type="submit"
-              className="auth-btn auth-btn-pri l-btn"
+              className="btn btn-pri w-full h-[42px] justify-center text-[13.5px] mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
               disabled={isPending}
             >
               {isPending ? 'Creating account…' : 'Create account'}
             </button>
           </form>
 
-          <div className="divider"><span>or</span></div>
+          <div className="flex items-center gap-3 text-muted text-[11.5px] my-[18px] before:content-[''] before:flex-1 before:h-px before:bg-line after:content-[''] after:flex-1 after:h-px after:bg-line"><span>or</span></div>
 
           <button
             type="button"
-            className="auth-btn auth-btn-ghost l-btn"
+            className="btn btn-ghost w-full h-[42px] justify-center text-[13.5px] mt-1"
           >
             <svg width="15" height="15" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h6a5.1 5.1 0 0 1-2.3 3.4v2.8h3.6c2.1-1.9 3.3-4.8 3.3-8.2z" />
@@ -117,9 +120,9 @@ export default function RegisterPage() {
             Continue with Google
           </button>
 
-          <p className="l-foot">
+          <p className="text-center text-[12.5px] text-text-2 mt-6">
             Already have an account?{' '}
-            <Link to="/login" className="auth-link">
+            <Link to="/login" className="link">
               Sign in
             </Link>
           </p>

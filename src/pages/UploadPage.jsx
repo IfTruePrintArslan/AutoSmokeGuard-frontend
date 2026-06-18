@@ -1,193 +1,138 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import '../styles/dashboard.css'
-import '../styles/upload.css'
+import { useSelector, useDispatch } from 'react-redux'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '../components/ui/select'
+import { Slider } from '../components/ui/slider'
+import { Switch } from '../components/ui/switch'
+import SeverityDistribution from '../components/SeverityDistribution'
+import { setSetting } from '../features/analysis/analysisSlice'
 
 /* ─────────────────────────────────────────────
-   Constants
+   Constants & validation
 ───────────────────────────────────────────── */
 
 const ALLOWED_MIME = new Set([
+  'video/mp4',
+  'video/x-msvideo',
+  'video/avi',
+  'video/quicktime',  // MOV
   'image/jpeg',
   'image/png',
-  'video/mp4',
-  'video/x-msvideo', // AVI
-  'video/avi',       // some browsers report this variant
 ])
 
-const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.mp4', '.avi'])
+const ALLOWED_EXT = new Set(['.mp4', '.avi', '.mov', '.jpg', '.jpeg', '.png'])
 
-const IMAGE_MIME = new Set(['image/jpeg', 'image/png'])
-const VIDEO_MIME = new Set(['video/mp4', 'video/x-msvideo', 'video/avi'])
+const MAX_BYTES = 2 * 1024 * 1024 * 1024 // 2 GB
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024   // 10 MB
-const MAX_VIDEO_BYTES = 100 * 1024 * 1024  // 100 MB
+const TICK_MS = 80
+const UPLOAD_DURATION_MS = 3000 // ~3 s simulated upload
 
-/* Simulated upload: completes in 1500–2500 ms */
-const UPLOAD_MIN_MS = 1500
-const UPLOAD_MAX_MS = 2500
-const TICK_MS = 60
-
-/* ─────────────────────────────────────────────
-   Helpers
-───────────────────────────────────────────── */
-
-function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function fileExtension(name) {
+function fileExt(name) {
   const dot = name.lastIndexOf('.')
   return dot >= 0 ? name.slice(dot).toLowerCase() : ''
 }
 
 function validateFile(file) {
-  const ext = fileExtension(file.name)
+  const ext = fileExt(file.name)
   const mimeOk = ALLOWED_MIME.has(file.type)
-  const extOk = ALLOWED_EXT.has(ext)
-
-  if (!mimeOk && !extOk) {
-    return { ok: false, reason: 'Unsupported file type' }
-  }
-
-  const isImage = IMAGE_MIME.has(file.type) || ['.jpg', '.jpeg', '.png'].includes(ext)
-  const isVideo = VIDEO_MIME.has(file.type) || ['.mp4', '.avi'].includes(ext)
-
-  if (isImage && file.size > MAX_IMAGE_BYTES) {
-    return { ok: false, reason: `Image exceeds 10 MB (${formatBytes(file.size)})` }
-  }
-  if (isVideo && file.size > MAX_VIDEO_BYTES) {
-    return { ok: false, reason: `Video exceeds 100 MB (${formatBytes(file.size)})` }
-  }
-
-  return { ok: true, reason: null }
+  const extOk  = ALLOWED_EXT.has(ext)
+  if (!mimeOk && !extOk) return 'Unsupported file type'
+  if (file.size > MAX_BYTES) return `Exceeds 2 GB (${(file.size / 1e9).toFixed(1)} GB)`
+  return null
 }
 
-function makeEntry(file) {
-  const { ok, reason } = validateFile(file)
-  const ext = fileExtension(file.name)
-  const isImage = IMAGE_MIME.has(file.type) || ['.jpg', '.jpeg', '.png'].includes(ext)
-
-  return {
-    id: crypto.randomUUID(),
-    file,
-    name: file.name,
-    size: file.size,
-    ext,
-    isImage,
-    objectUrl: isImage && ok ? URL.createObjectURL(file) : null,
-    status: ok ? 'uploading' : 'rejected', // 'uploading' | 'done' | 'rejected'
-    progress: 0,
-    rejectedReason: reason,
-  }
+function fmtSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
 /* ─────────────────────────────────────────────
-   SVG icons (inline — no extra dependency)
+   Inline SVG icons — verbatim from mockup
 ───────────────────────────────────────────── */
 
-function IconUploadCloud() {
+function IconUpload() {
   return (
-    <svg className="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="16 16 12 12 8 16" />
-      <line x1="12" y1="12" x2="12" y2="21" />
-      <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-    </svg>
-  )
-}
-
-function IconFilm() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-      <line x1="7" y1="2" x2="7" y2="22" />
-      <line x1="17" y1="2" x2="17" y2="22" />
-      <line x1="2" y1="12" x2="22" y2="12" />
-      <line x1="2" y1="7" x2="7" y2="7" />
-      <line x1="2" y1="17" x2="7" y2="17" />
-      <line x1="17" y1="17" x2="22" y2="17" />
-      <line x1="17" y1="7" x2="22" y2="7" />
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v3a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-3"/>
+      <path d="M12 3v12"/>
+      <path d="m7 8 5-5 5 5"/>
     </svg>
   )
 }
 
 function IconCheck() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  )
-}
-
-function IconX() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m4.5 12.5 5 5 10-11"/>
     </svg>
   )
 }
 
 /* ─────────────────────────────────────────────
-   FileRow component
+   FileRow — renders one .f-row
+   Handles both seed rows and real rows
 ───────────────────────────────────────────── */
 
 function FileRow({ entry, onRemove }) {
+  const isErr = entry.status === 'err'
+  // visual icon-state: err rows render as the "q" (paused) icon box
+  const iconState = isErr ? 'q' : entry.status
+
   return (
-    <li className="file-row">
-      {/* Preview */}
-      <div className="file-preview">
-        {entry.isImage && entry.objectUrl ? (
-          <img src={entry.objectUrl} alt={entry.name} />
-        ) : (
-          <div className="file-preview-icon">
-            <IconFilm />
-            <span className="file-ext">{entry.ext.replace('.', '')}</span>
-          </div>
+    <div className={`flex gap-3.5 items-start${entry.dim ? ' opacity-55' : ''}`}>
+      {/* icon */}
+      <div
+        className={
+          'w-[34px] h-[34px] rounded-[9px] flex-shrink-0 flex items-center justify-center mt-0.5 relative' +
+          (iconState === 'ok' ? ' bg-low-bg text-low' : '') +
+          (iconState === 'run' ? ' bg-accent-glow' : '') +
+          (iconState === 'q' ? ' bg-[rgba(148,163,184,0.1)]' : '')
+        }
+      >
+        {iconState === 'ok' && <IconCheck />}
+        {iconState === 'run' && (
+          <span className="block w-[14px] h-[14px] rounded-[99px] border-[2.5px] border-white/25 border-t-accent animate-spin [animation-duration:0.7s]" />
         )}
+        {iconState === 'q' && <span className="text-muted text-[12px]">⏸</span>}
       </div>
 
-      {/* Name + size */}
-      <div className="file-info">
-        <div className="file-name" title={entry.name}>{entry.name}</div>
-        <div className="file-size mono">{formatBytes(entry.size)}</div>
-      </div>
+      {/* info */}
+      <div className="flex-1">
+        <div className="flex justify-between text-[13px]">
+          <b className={`font-[550]${isErr ? ' text-high' : ''}`}>{entry.name}</b>
+          <span className="mono text-muted text-[12px]">{entry.sizeLabel}</span>
+        </div>
 
-      {/* Progress / status */}
-      <div className="file-progress-wrap">
-        {entry.status === 'rejected' ? (
-          <span className="file-rejected-tag" title={entry.rejectedReason}>
-            Rejected — {entry.rejectedReason}
-          </span>
-        ) : entry.status === 'done' ? (
-          <span className="file-done-tag">
-            <IconCheck />
-            Done
-          </span>
+        {isErr ? (
+          <div className="text-[11.5px] text-high mt-1">{entry.errMsg}</div>
         ) : (
           <>
-            <div className="file-progress-header">
-              <span className="file-progress-label">Uploading…</span>
-              <span className="file-progress-pct mono">{entry.progress}%</span>
+            <div className="h-1.5 rounded-[99px] bg-[rgba(148,163,184,0.12)] mt-2 mb-1.5 overflow-hidden">
+              <i className="block h-full rounded-[99px] transition-[width] duration-[120ms] ease-linear" style={{ width: `${entry.progress}%`, background: entry.barColor }} />
             </div>
-            <div className="file-bar">
-              <div className="file-bar-fill" style={{ width: `${entry.progress}%` }} />
-            </div>
+            <div className="text-[11.5px] text-muted">{entry.sub}</div>
           </>
         )}
       </div>
 
-      {/* Remove */}
+      {/* remove */}
       <button
-        className="file-remove-btn"
-        onClick={() => onRemove(entry.id)}
-        title="Remove file"
+        className="w-[28px] h-[28px] flex-shrink-0 self-center inline-flex items-center justify-center bg-transparent border border-line-2 text-muted cursor-pointer text-[15px] leading-none rounded-[7px] transition-colors font-sans hover:text-high hover:border-high hover:bg-high-bg"
         type="button"
+        title="Remove"
+        aria-label={`Remove ${entry.name}`}
+        onClick={() => onRemove(entry.id)}
       >
-        <IconX />
+        ×
       </button>
-    </li>
+    </div>
   )
 }
 
@@ -196,224 +141,327 @@ function FileRow({ entry, onRemove }) {
 ───────────────────────────────────────────── */
 
 export default function UploadPage() {
-  const [files, setFiles] = useState([])
-  const [dragOver, setDragOver] = useState(false)
+  // real user-added files — queue starts empty
+  const [userFiles, setUserFiles] = useState([])
+  const [dragOver, setDragOver]   = useState(false)
 
-  const inputRef = useRef(null)
-  // Map of id → intervalId for active upload simulations
+  // analysis settings — global Redux state
+  const dispatch = useDispatch()
+  const settings = useSelector((s) => s.analysis.settings)
+  const {
+    model,
+    frameSampling,
+    sensitivity,
+    autoPdf,
+    plateRedaction,
+    nightMode,
+  } = settings
+
+  const inputRef  = useRef(null)
   const timersRef = useRef({})
 
-  /* ── Cleanup all timers + object URLs on unmount ── */
+  /* ── Cleanup on unmount ── */
   useEffect(() => {
     return () => {
-      // Clear all active intervals
       Object.values(timersRef.current).forEach(clearInterval)
-      // Revoke all object URLs still held
-      setFiles((prev) => {
-        prev.forEach((e) => {
-          if (e.objectUrl) URL.revokeObjectURL(e.objectUrl)
-        })
-        return prev
-      })
     }
   }, [])
 
-  /* ── Start simulated upload for one entry ── */
+  /* ── Simulated upload progress ── */
   const startUpload = useCallback((id) => {
-    const durationMs = UPLOAD_MIN_MS + Math.random() * (UPLOAD_MAX_MS - UPLOAD_MIN_MS)
-    const totalTicks = Math.ceil(durationMs / TICK_MS)
+    const totalTicks = Math.ceil(UPLOAD_DURATION_MS / TICK_MS)
     let tick = 0
 
-    const intervalId = setInterval(() => {
+    const iid = setInterval(() => {
       tick++
-      const rawPct = tick / totalTicks
-      // Ease-out: fast start, slows near 100
-      const pct = Math.round(100 * (1 - Math.pow(1 - rawPct, 2.2)))
-      const clamped = Math.min(pct, 100)
+      const raw = tick / totalTicks
+      const pct = Math.min(Math.round(100 * (1 - Math.pow(1 - raw, 2))), 100)
 
-      setFiles((prev) =>
+      setUserFiles((prev) =>
         prev.map((e) => {
           if (e.id !== id) return e
-          if (clamped >= 100) {
-            return { ...e, progress: 100, status: 'done' }
+          if (pct >= 100) {
+            return { ...e, progress: 100, status: 'ok', barColor: 'var(--low)', sub: 'Uploaded · ready for analysis' }
           }
-          return { ...e, progress: clamped }
+          return {
+            ...e,
+            progress: pct,
+            sub: `Uploading… ${pct}%`,
+          }
         })
       )
 
       if (tick >= totalTicks) {
-        clearInterval(intervalId)
+        clearInterval(iid)
         delete timersRef.current[id]
       }
     }, TICK_MS)
 
-    timersRef.current[id] = intervalId
+    timersRef.current[id] = iid
   }, [])
 
-  /* ── Add files (merge, deduplicate by name+size) ── */
-  const addFiles = useCallback((fileList) => {
-    const incoming = Array.from(fileList)
-    setFiles((prev) => {
-      const existingKeys = new Set(prev.map((e) => `${e.name}|${e.size}`))
-      const newEntries = incoming
-        .filter((f) => !existingKeys.has(`${f.name}|${f.size}`))
-        .map(makeEntry)
+  /* ── Add files ── */
+  const addFiles = useCallback(
+    (fileList) => {
+      const incoming = Array.from(fileList)
+      setUserFiles((prev) => {
+        const existingKeys = new Set(prev.map((e) => `${e.name}|${e.rawSize}`))
+        const newEntries = incoming
+          .filter((f) => !existingKeys.has(`${f.name}|${f.size}`))
+          .map((f) => {
+            const errMsg = validateFile(f)
+            const base = {
+              id: crypto.randomUUID(),
+              name: f.name,
+              sizeLabel: fmtSize(f.size),
+              rawSize: f.size,
+              seed: false,
+            }
+            if (errMsg) {
+              return { ...base, status: 'err', errMsg, progress: 0, barColor: '#e5e5e5', sub: '' }
+            }
+            return {
+              ...base,
+              status: 'run',
+              errMsg: null,
+              progress: 0,
+              barColor: '#e5e5e5',
+              sub: 'Uploading… 0%',
+            }
+          })
 
-      // Start timers for accepted files
-      newEntries.forEach((entry) => {
-        if (entry.status === 'uploading') {
-          startUpload(entry.id)
-        }
+        newEntries.forEach((e) => {
+          if (e.status === 'run') startUpload(e.id)
+        })
+
+        return [...prev, ...newEntries]
       })
+    },
+    [startUpload]
+  )
 
-      return [...prev, ...newEntries]
-    })
-  }, [startUpload])
-
-  /* ── Remove a file ── */
+  /* ── Remove ── */
   const removeFile = useCallback((id) => {
-    // Cancel its timer if still running
     if (timersRef.current[id]) {
       clearInterval(timersRef.current[id])
       delete timersRef.current[id]
     }
-    setFiles((prev) => {
-      const entry = prev.find((e) => e.id === id)
-      if (entry?.objectUrl) URL.revokeObjectURL(entry.objectUrl)
-      return prev.filter((e) => e.id !== id)
-    })
+    setUserFiles((prev) => prev.filter((e) => e.id !== id))
   }, [])
 
   /* ── Drag handlers ── */
-  const handleDragEnter = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragOver(true)
+  const onDragEnter = (e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true) }
+  const onDragOver  = (e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true) }
+  const onDragLeave = (e) => {
+    e.preventDefault(); e.stopPropagation()
+    if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(false)
   }
-  const handleDragOver = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragOver(true)
-  }
-  const handleDragLeave = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    // Only clear drag-over when leaving the zone itself, not a child
-    if (!e.currentTarget.contains(e.relatedTarget)) {
-      setDragOver(false)
-    }
-  }
-  const handleDrop = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragOver(false)
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      addFiles(e.dataTransfer.files)
-    }
+  const onDrop = (e) => {
+    e.preventDefault(); e.stopPropagation(); setDragOver(false)
+    if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files)
   }
 
-  /* ── Input change handler ── */
-  const handleInputChange = (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      addFiles(e.target.files)
-      // Reset so the same file can be re-added after removal
-      e.target.value = ''
-    }
-  }
+  const openPicker = () => inputRef.current?.click()
 
-  /* ── Click-to-browse ── */
-  const handleZoneClick = () => {
-    inputRef.current?.click()
-  }
+  /* ── Queue stats (real queue only) ── */
+  const fileCount  = userFiles.filter((e) => e.status !== 'err').length
+  const totalBytes = userFiles
+    .filter((e) => e.status !== 'err')
+    .reduce((acc, e) => acc + (e.rawSize || 0), 0)
+  const totalLabel = fmtSize(totalBytes)
 
-  /* ── Counts for badge ── */
-  const acceptedCount = files.filter((e) => e.status !== 'rejected').length
+  // ready files = fully-uploaded user rows
+  const readyCount = userFiles.filter((e) => e.status === 'ok').length
 
   return (
-    <div>
-      {/* ── Page header ── */}
+    <div className="h-full flex flex-col">
+      {/* Page header */}
       <div className="page-head">
         <div>
-          <h1>Upload</h1>
-          <p>Upload traffic footage for smoke detection.</p>
+          <h1>Upload media</h1>
+          <p>Add traffic footage or stills for emission analysis.</p>
         </div>
+        <div style={{ display: 'flex', gap: '10px' }} />
       </div>
 
-      {/* ── Hidden file input ── */}
+      {/* Hidden file input */}
       <input
         ref={inputRef}
         type="file"
         multiple
-        accept="image/jpeg,image/png,video/mp4,video/x-msvideo,.jpg,.jpeg,.png,.mp4,.avi"
+        accept="video/mp4,video/x-msvideo,video/avi,video/quicktime,image/jpeg,image/png,.mp4,.avi,.mov,.jpg,.jpeg,.png"
         style={{ display: 'none' }}
-        onChange={handleInputChange}
+        onChange={(e) => {
+          if (e.target.files?.length) addFiles(e.target.files)
+          e.target.value = ''
+        }}
       />
 
-      {/* ── Dropzone ── */}
-      <div
-        className={`dropzone${dragOver ? ' drag-over' : ''}`}
-        onClick={handleZoneClick}
-        onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' || e.key === ' ' ? handleZoneClick() : undefined}
-        aria-label="Upload zone — click or drag files here"
-      >
-        <IconUploadCloud />
-        <div className="dropzone-title">Drag &amp; drop files here</div>
-        <div className="dropzone-sub">or <span style={{ textDecoration: 'underline', color: 'var(--text)' }}>click to browse</span></div>
-        <div className="dropzone-hint">
-          Accepted: JPEG, PNG (max 10 MB) · MP4, AVI (max 100 MB)
-        </div>
-      </div>
-
-      {/* ── Upload actions row ── */}
-      {files.length > 0 && (
-        <div className="upload-actions">
-          <button
-            className="btn btn-ghost"
-            type="button"
-            onClick={() => {
-              // Clear all timers
-              Object.values(timersRef.current).forEach(clearInterval)
-              timersRef.current = {}
-              // Revoke all object URLs
-              files.forEach((e) => {
-                if (e.objectUrl) URL.revokeObjectURL(e.objectUrl)
-              })
-              setFiles([])
-            }}
+      <div className="grid grid-cols-[1fr_372px] gap-4 flex-1 min-h-0">
+        {/* ── LEFT column ── */}
+        <div className="flex flex-col min-h-0">
+          {/* Dropzone */}
+          <div
+            className="card p-2.5 cursor-pointer"
+            onClick={openPicker}
+            onDragEnter={onDragEnter}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openPicker()}
           >
-            Clear all
-          </button>
-        </div>
-      )}
+            <div
+              className={
+                'border-[1.5px] border-dashed rounded-[11px] flex flex-col items-center justify-center h-[300px] text-center transition-[border-color,background] duration-150 ease-out ' +
+                (dragOver ? 'border-accent bg-[rgba(250,250,250,0.04)]' : 'border-white/40')
+              }
+            >
+              <div className="w-[58px] h-[58px] rounded-[16px] bg-accent-glow text-accent flex items-center justify-center mb-[18px] shadow-[0_0_0_8px_rgba(255,255,255,0.05)]">
+                <IconUpload />
+              </div>
+              <h3 className="text-[16.5px] font-[620]">Drag &amp; drop traffic footage</h3>
+              <p className="text-[13px] text-text-2 mt-[7px]">
+                or{' '}
+                <a
+                  className="link"
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); openPicker() }}
+                >
+                  browse files
+                </a>{' '}
+                from your computer
+              </p>
+              <div className="flex items-center gap-2 mt-5">
+                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">MP4</span>
+                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">AVI</span>
+                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">MOV</span>
+                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">JPEG</span>
+                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">PNG</span>
+                <em className="not-italic text-[11.5px] text-muted ml-1">· up to 2 GB</em>
+              </div>
+            </div>
+          </div>
 
-      {/* ── Files card ── */}
-      <div className="files-card">
-        <div className="files-head card-head" style={{ borderBottom: '1px solid var(--line)', paddingBottom: '14px' }}>
-          <h3>
-            Files
-            <span className="file-count-badge mono">{acceptedCount}</span>
-          </h3>
+          {/* Upload queue */}
+          <div className="card mt-4 flex flex-col flex-1 min-h-0">
+            <div className="card-head">
+              <h3>Upload queue</h3>
+              <span className="text-[12px] text-text-2">
+                {fileCount} file{fileCount !== 1 ? 's' : ''}
+                {fileCount > 0 ? ` · ${totalLabel} total` : ''}
+              </span>
+            </div>
+            <div className="pt-2 pb-4 px-[18px] flex flex-col gap-4 overflow-y-auto flex-1">
+              {userFiles.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center text-[13px] text-muted py-10">
+                  No files added yet.
+                </div>
+              ) : (
+                userFiles.map((entry) => (
+                  <FileRow key={entry.id} entry={entry} onRemove={removeFile} />
+                ))
+              )}
+            </div>
+          </div>
         </div>
 
-        {files.length === 0 ? (
-          <div className="files-empty">No files added yet.</div>
-        ) : (
-          <ul className="file-list">
-            {files.map((entry) => (
-              <FileRow
-                key={entry.id}
-                entry={entry}
-                onRemove={removeFile}
+        {/* ── RIGHT column — Analysis settings + severity widget ── */}
+        <div className="flex flex-col min-h-0 gap-4">
+        <div className="card">
+          <div className="card-head">
+            <h3>Analysis settings</h3>
+          </div>
+          <div className="pt-1.5 pb-[18px] px-[18px]">
+            <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Detection model</label>
+            <Select value={model} onValueChange={(v) => dispatch(setSetting({ key: 'model', value: v }))}>
+              <SelectTrigger aria-label="Detection model">
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="yolov8-2.3">YOLOv8-seg · v2.3</SelectItem>
+                <SelectItem value="yolov11-3.0">YOLOv11-seg · v3.0</SelectItem>
+                <SelectItem value="rtdetr-1.2">RT-DETR · v1.2</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Smoke sensitivity</label>
+            <div className="pt-1.5 px-0.5">
+              <Slider
+                value={[sensitivity]}
+                onValueChange={(v) => dispatch(setSetting({ key: 'sensitivity', value: v[0] }))}
+                min={0}
+                max={100}
+                step={1}
               />
-            ))}
-          </ul>
-        )}
+              <div className="flex justify-between text-[10.5px] text-muted mt-[9px]">
+                <span>Low</span>
+                <span>Balanced</span>
+                <span>Strict</span>
+              </div>
+            </div>
+
+            <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Frame sampling</label>
+            <Select value={frameSampling} onValueChange={(v) => dispatch(setSetting({ key: 'frameSampling', value: v }))}>
+              <SelectTrigger aria-label="Frame sampling">
+                <SelectValue placeholder="Select sampling" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="every">Every frame</SelectItem>
+                <SelectItem value="every5">Every 5th frame</SelectItem>
+                <SelectItem value="every10">Every 10th frame</SelectItem>
+                <SelectItem value="every30">Every 30th frame</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="mt-[22px] flex flex-col gap-[15px]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <b className="text-[12.5px] font-[550] block">Auto-generate PDF report</b>
+                  <span className="text-[11px] text-muted">Create report when analysis completes</span>
+                </div>
+                <Switch checked={autoPdf} onCheckedChange={(v) => dispatch(setSetting({ key: 'autoPdf', value: v }))} aria-label="Auto-generate PDF report" />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <b className="text-[12.5px] font-[550] block">License plate redaction</b>
+                  <span className="text-[11px] text-muted">Blur plates in exported frames</span>
+                </div>
+                <Switch checked={plateRedaction} onCheckedChange={(v) => dispatch(setSetting({ key: 'plateRedaction', value: v }))} aria-label="License plate redaction" />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <b className="text-[12.5px] font-[550] block">Night-mode enhancement</b>
+                  <span className="text-[11px] text-muted">Boost contrast for low-light footage</span>
+                </div>
+                <Switch checked={nightMode} onCheckedChange={(v) => dispatch(setSetting({ key: 'nightMode', value: v }))} aria-label="Night-mode enhancement" />
+              </div>
+            </div>
+
+            <button
+              className="btn btn-pri w-full h-[42px] justify-center mt-[22px] disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
+              disabled={readyCount === 0}
+              onClick={() =>
+                alert(
+                  `Starting analysis on ${readyCount} file${readyCount !== 1 ? 's' : ''}.`
+                )
+              }
+            >
+              Start analysis
+            </button>
+
+            <p className="text-[11.5px] text-muted text-center mt-3">
+              Estimated processing time:{' '}
+              <b className="text-text-2">~{readyCount < 3 ? '2 min' : `${Math.ceil(readyCount * 0.8)} min`}</b>{' '}
+              for {readyCount} ready file{readyCount !== 1 ? 's' : ''}
+            </p>
+          </div>
+        </div>
+
+        <SeverityDistribution className="flex-1" />
+        </div>
       </div>
     </div>
   )
