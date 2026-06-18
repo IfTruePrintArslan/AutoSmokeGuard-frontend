@@ -1,5 +1,4 @@
 import { useSelector } from 'react-redux'
-import '../styles/dashboard.css'
 import {
   ResponsiveContainer,
   AreaChart,
@@ -138,16 +137,16 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPI stat cards ── */}
-      <div className="kpis">
+      <div className="grid grid-cols-4 gap-4 mb-4">
 
         {/* Total analyses */}
-        <div className="card kpi">
-          <div className="kpi-top">
+        <div className="card py-4 px-[18px]">
+          <div className="flex justify-between text-[12.5px] text-text-2">
             <span>Total analyses</span>
-            <span className="delta up">▲ 12%</span>
+            <span className="text-[11px] font-semibold py-0.5 px-[7px] rounded-[99px] text-low bg-low-bg">▲ 12%</span>
           </div>
-          <div className="kpi-row">
-            <div className="kpi-val mono">248</div>
+          <div className="flex items-end justify-between mt-2.5">
+            <div className="mono text-[27px] font-[650] tracking-[-0.03em]">248</div>
             <ResponsiveContainer width={92} height={34}>
               <LineChart data={sparkTotal}>
                 <Line type="monotone" dataKey="v" dot={false} strokeWidth={1.5} stroke="#fafafa" isAnimationActive={false} />
@@ -157,13 +156,13 @@ export default function DashboardPage() {
         </div>
 
         {/* High severity */}
-        <div className="card kpi">
-          <div className="kpi-top">
+        <div className="card py-4 px-[18px]">
+          <div className="flex justify-between text-[12.5px] text-text-2">
             <span>High severity</span>
-            <span className="delta down">▼ 8%</span>
+            <span className="text-[11px] font-semibold py-0.5 px-[7px] rounded-[99px] text-high bg-high-bg">▼ 8%</span>
           </div>
-          <div className="kpi-row">
-            <div className="kpi-val mono">32</div>
+          <div className="flex items-end justify-between mt-2.5">
+            <div className="mono text-[27px] font-[650] tracking-[-0.03em]">32</div>
             <ResponsiveContainer width={92} height={34}>
               <LineChart data={sparkHigh}>
                 <Line type="monotone" dataKey="v" dot={false} strokeWidth={1.5} stroke="#f87171" isAnimationActive={false} />
@@ -173,13 +172,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Reports issued */}
-        <div className="card kpi">
-          <div className="kpi-top">
+        <div className="card py-4 px-[18px]">
+          <div className="flex justify-between text-[12.5px] text-text-2">
             <span>Reports issued</span>
-            <span className="delta up">▲ 9%</span>
+            <span className="text-[11px] font-semibold py-0.5 px-[7px] rounded-[99px] text-low bg-low-bg">▲ 9%</span>
           </div>
-          <div className="kpi-row">
-            <div className="kpi-val mono">196</div>
+          <div className="flex items-end justify-between mt-2.5">
+            <div className="mono text-[27px] font-[650] tracking-[-0.03em]">196</div>
             <ResponsiveContainer width={92} height={34}>
               <LineChart data={sparkReports}>
                 <Line type="monotone" dataKey="v" dot={false} strokeWidth={1.5} stroke="#fafafa" isAnimationActive={false} />
@@ -189,13 +188,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Avg. confidence */}
-        <div className="card kpi">
-          <div className="kpi-top">
+        <div className="card py-4 px-[18px]">
+          <div className="flex justify-between text-[12.5px] text-text-2">
             <span>Avg. confidence</span>
-            <span className="delta up">▲ 2.4%</span>
+            <span className="text-[11px] font-semibold py-0.5 px-[7px] rounded-[99px] text-low bg-low-bg">▲ 2.4%</span>
           </div>
-          <div className="kpi-row">
-            <div className="kpi-val mono">0.91</div>
+          <div className="flex items-end justify-between mt-2.5">
+            <div className="mono text-[27px] font-[650] tracking-[-0.03em]">0.91</div>
             <ResponsiveContainer width={92} height={34}>
               <LineChart data={sparkConf}>
                 <Line type="monotone" dataKey="v" dot={false} strokeWidth={1.5} stroke="#a3a3a3" isAnimationActive={false} />
@@ -207,7 +206,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Row 2: line chart + donut chart ── */}
-      <div className="grid-2">
+      <div className="grid grid-cols-[1fr_380px] gap-4 mb-4">
 
         {/* Detections over time */}
         <div className="card">
@@ -216,13 +215,13 @@ export default function DashboardPage() {
               <h3>Detections over time</h3>
               <div className="sub">Vehicles flagged per day — last 30 days</div>
             </div>
-            <div className="seg">
-              <span className="on">30d</span>
-              <span>90d</span>
-              <span>1y</span>
+            <div className="flex border border-line-2 rounded-lg overflow-hidden">
+              <span className="text-[11.5px] py-[5px] px-[11px] bg-white/[0.13] text-accent font-semibold">30d</span>
+              <span className="text-[11.5px] py-[5px] px-[11px] text-text-2">90d</span>
+              <span className="text-[11.5px] py-[5px] px-[11px] text-text-2">1y</span>
             </div>
           </div>
-          <div className="chart">
+          <div className="w-[calc(100%-36px)] h-[230px] mt-3.5 mx-[18px]">
             <ResponsiveContainer width="100%" height={230}>
               <ComposedChart data={detectionData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
                 <defs>
@@ -259,9 +258,9 @@ export default function DashboardPage() {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <div className="legend">
-            <span><i style={{ background: '#fafafa' }}></i>All detections</span>
-            <span><i style={{ background: '#f87171' }}></i>High severity</span>
+          <div className="flex gap-[18px] pt-2.5 pb-3.5 px-[18px] text-[12px] text-text-2">
+            <span><i className="inline-block w-2 h-2 rounded-[2px] mr-[7px]" style={{ background: '#fafafa' }}></i>All detections</span>
+            <span><i className="inline-block w-2 h-2 rounded-[2px] mr-[7px]" style={{ background: '#f87171' }}></i>High severity</span>
           </div>
         </div>
 
@@ -273,7 +272,7 @@ export default function DashboardPage() {
               <div className="sub">All-time breakdown</div>
             </div>
           </div>
-          <div className="donut-wrap">
+          <div className="flex items-center gap-[22px] py-6 px-[22px]">
             <div style={{ position: 'relative', width: 172, height: 172, flexShrink: 0 }}>
               <PieChart width={172} height={172}>
                 <Pie
@@ -309,21 +308,21 @@ export default function DashboardPage() {
                 <div style={{ fontSize: '11px', color: '#6f6f6f', fontFamily: 'var(--font)' }}>analyses</div>
               </div>
             </div>
-            <div className="donut-legend">
-              <div>
+            <div className="flex-1 flex flex-col gap-[13px]">
+              <div className="flex items-center">
                 <span className="sev sev-low"><i></i>Low</span>
-                <b className="mono">149</b>
-                <em>60%</em>
+                <b className="mono ml-auto font-semibold">149</b>
+                <em className="not-italic text-muted text-[11.5px] w-[38px] text-right">60%</em>
               </div>
-              <div>
+              <div className="flex items-center">
                 <span className="sev sev-mod"><i></i>Moderate</span>
-                <b className="mono">67</b>
-                <em>27%</em>
+                <b className="mono ml-auto font-semibold">67</b>
+                <em className="not-italic text-muted text-[11.5px] w-[38px] text-right">27%</em>
               </div>
-              <div>
+              <div className="flex items-center">
                 <span className="sev sev-high"><i></i>High</span>
-                <b className="mono">32</b>
-                <em>13%</em>
+                <b className="mono ml-auto font-semibold">32</b>
+                <em className="not-italic text-muted text-[11.5px] w-[38px] text-right">13%</em>
               </div>
             </div>
           </div>
@@ -332,7 +331,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Row 3: recent analyses table + processing queue ── */}
-      <div className="grid-3">
+      <div className="grid grid-cols-[1fr_380px] gap-4">
 
         {/* Recent analyses */}
         <div className="card">
@@ -354,7 +353,7 @@ export default function DashboardPage() {
                 <td><div className="thumb"></div></td>
                 <td>
                   <b style={{ fontWeight: 560 }}>#1042</b>
-                  <div className="td-sub">traffic_cam_03.mp4</div>
+                  <div className="text-[11.5px] text-muted mt-0.5">traffic_cam_03.mp4</div>
                 </td>
                 <td>Truck</td>
                 <td className="mono">0.92</td>
@@ -365,7 +364,7 @@ export default function DashboardPage() {
                 <td><div className="thumb"></div></td>
                 <td>
                   <b style={{ fontWeight: 560 }}>#1041</b>
-                  <div className="td-sub">junction_n4_dusk.mp4</div>
+                  <div className="text-[11.5px] text-muted mt-0.5">junction_n4_dusk.mp4</div>
                 </td>
                 <td>Sedan</td>
                 <td className="mono">0.88</td>
@@ -376,7 +375,7 @@ export default function DashboardPage() {
                 <td><div className="thumb"></div></td>
                 <td>
                   <b style={{ fontWeight: 560 }}>#1040</b>
-                  <div className="td-sub">highway_e2_0609.mp4</div>
+                  <div className="text-[11.5px] text-muted mt-0.5">highway_e2_0609.mp4</div>
                 </td>
                 <td>Bus</td>
                 <td className="mono">0.85</td>
@@ -395,30 +394,30 @@ export default function DashboardPage() {
               <i style={{ background: 'var(--accent)' }}></i>2 active
             </span>
           </div>
-          <div className="queue">
-            <div className="q-item">
-              <div className="q-row">
-                <b>traffic_cam_07.mp4</b>
-                <span className="mono">62%</span>
+          <div className="py-3.5 px-[18px] flex flex-col gap-4">
+            <div>
+              <div className="flex justify-between text-[13px]">
+                <b className="font-[550]">traffic_cam_07.mp4</b>
+                <span className="mono text-accent font-semibold text-[12px]">62%</span>
               </div>
-              <div className="bar"><i style={{ width: '62%' }}></i></div>
-              <div className="q-sub">Smoke segmentation · ~40s remaining</div>
+              <div className="h-1.5 rounded-[99px] bg-[rgba(148,163,184,0.12)] mt-2 mb-1.5 overflow-hidden"><i className="block h-full rounded-[99px] bg-[#e5e5e5]" style={{ width: '62%' }}></i></div>
+              <div className="text-[11.5px] text-muted">Smoke segmentation · ~40s remaining</div>
             </div>
-            <div className="q-item">
-              <div className="q-row">
-                <b>ring_road_s1.mp4</b>
-                <span className="mono">18%</span>
+            <div>
+              <div className="flex justify-between text-[13px]">
+                <b className="font-[550]">ring_road_s1.mp4</b>
+                <span className="mono text-accent font-semibold text-[12px]">18%</span>
               </div>
-              <div className="bar"><i style={{ width: '18%' }}></i></div>
-              <div className="q-sub">Vehicle detection · ~2m remaining</div>
+              <div className="h-1.5 rounded-[99px] bg-[rgba(148,163,184,0.12)] mt-2 mb-1.5 overflow-hidden"><i className="block h-full rounded-[99px] bg-[#e5e5e5]" style={{ width: '18%' }}></i></div>
+              <div className="text-[11.5px] text-muted">Vehicle detection · ~2m remaining</div>
             </div>
-            <div className="q-item dim">
-              <div className="q-row">
-                <b>depot_exit_cam.avi</b>
+            <div className="opacity-55">
+              <div className="flex justify-between text-[13px]">
+                <b className="font-[550]">depot_exit_cam.avi</b>
                 <span style={{ color: 'var(--muted)', fontSize: '11.5px' }}>Queued</span>
               </div>
-              <div className="bar"><i style={{ width: '0' }}></i></div>
-              <div className="q-sub">Waiting for worker</div>
+              <div className="h-1.5 rounded-[99px] bg-[rgba(148,163,184,0.12)] mt-2 mb-1.5 overflow-hidden"><i className="block h-full rounded-[99px] bg-[#e5e5e5]" style={{ width: '0' }}></i></div>
+              <div className="text-[11.5px] text-muted">Waiting for worker</div>
             </div>
           </div>
         </div>
