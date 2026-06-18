@@ -35,12 +35,24 @@
   --radius-card: 14px;
 }
 
-/* Severity translucent backgrounds — kept as plain CSS vars (rgba not well-suited for @theme) */
+/* Severity translucent backgrounds + accent glow — exposed both as Tailwind
+   theme colors (usable as bg-high-bg, bg-accent-glow, etc.) AND as plain CSS
+   vars (rgba) so inline style={{ ... 'var(--accent-glow)' }} references and the
+   --font alias used by Recharts/inline styles keep resolving. */
+@theme {
+  --color-high-bg: rgba(248, 113, 113, 0.10);
+  --color-mod-bg: rgba(251, 191, 36, 0.10);
+  --color-low-bg: rgba(74, 222, 128, 0.10);
+  --color-accent-glow: rgba(255, 255, 255, 0.07);
+}
+
 :root {
   --high-bg: rgba(248, 113, 113, 0.10);
   --mod-bg: rgba(251, 191, 36, 0.10);
   --low-bg: rgba(74, 222, 128, 0.10);
   --accent-glow: rgba(255, 255, 255, 0.07);
+  /* alias consumed by inline styles / Recharts tooltips */
+  --font: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* Base reset — kept inside @layer base so Tailwind utility classes
@@ -66,4 +78,116 @@ body {
 
 svg text {
   font-family: var(--font-sans);
+}
+
+/* Kill Recharts focus outlines (targets Recharts-generated DOM) */
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Repeated structural chrome — defined ONCE here as Tailwind v4
+   components. Only genuinely-repeated patterns live here; every
+   page-specific one-off is inline utilities in the JSX.
+───────────────────────────────────────────────────────────── */
+@layer components {
+  /* page header */
+  .page-head {
+    @apply flex items-end justify-between mb-[22px];
+  }
+  .page-head h1 {
+    @apply text-[21px] font-bold tracking-[-0.02em];
+  }
+  .page-head p {
+    @apply text-[13px] text-text-2 mt-1;
+  }
+
+  /* cards */
+  .card {
+    @apply bg-surface border border-line rounded-card;
+  }
+  .card-head {
+    @apply flex items-center justify-between pt-4 px-[18px];
+  }
+  .card-head h3 {
+    @apply text-[13.5px] font-semibold;
+  }
+  .card-head .sub {
+    @apply text-[12px] text-text-2 mt-0.5;
+  }
+
+  /* link */
+  .link {
+    @apply text-[12.5px] text-[#fafafa] no-underline font-semibold;
+  }
+
+  /* severity badges */
+  .sev {
+    @apply inline-flex items-center gap-1.5 text-[11.5px] font-semibold py-[3px] px-[9px] rounded-[99px];
+  }
+  .sev i {
+    @apply w-1.5 h-1.5 rounded-[99px] inline-block;
+  }
+  .sev-high {
+    @apply bg-high-bg text-high;
+  }
+  .sev-high i {
+    @apply bg-high;
+  }
+  .sev-mod {
+    @apply bg-mod-bg text-mod;
+  }
+  .sev-mod i {
+    @apply bg-mod;
+  }
+  .sev-low {
+    @apply bg-low-bg text-low;
+  }
+  .sev-low i {
+    @apply bg-low;
+  }
+
+  /* tables */
+  table {
+    @apply w-full border-collapse;
+  }
+  th {
+    @apply text-[11px] font-semibold tracking-[0.07em] uppercase text-muted text-left py-3 px-[18px] border-b border-line bg-[#101010];
+  }
+  td {
+    @apply py-[13px] px-[18px] border-b border-line text-[13px] align-middle;
+  }
+  tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* mono numerals */
+  .mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* video thumbnail placeholder */
+  .thumb {
+    @apply w-[52px] h-[34px] rounded-[7px] bg-[#1f1f1f] border border-line-2 relative overflow-hidden;
+  }
+  .thumb::after {
+    content: '';
+    @apply absolute w-[14px] h-[9px] rounded-[2px];
+    inset: auto 6px 5px auto;
+    border: 1.5px solid #8a8a8a;
+    right: 6px;
+  }
+
+  /* buttons */
+  .btn {
+    @apply inline-flex items-center gap-2 h-9 px-4 rounded-[9px] font-semibold text-[13px] border border-transparent cursor-pointer font-sans;
+  }
+  .btn-pri {
+    @apply bg-[#fafafa] text-[#0a0a0a];
+  }
+  .btn-ghost {
+    @apply bg-[#161616] border-line-2 text-text;
+  }
 }
