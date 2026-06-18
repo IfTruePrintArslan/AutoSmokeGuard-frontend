@@ -18,7 +18,7 @@ export default function Topbar() {
 
   return (
     <div
-      className="flex items-center gap-[14px] flex-shrink-0 px-4 sm:px-5 lg:px-7"
+      className="flex items-center gap-[14px] flex-shrink-0 px-4 sm:px-5 dk:px-7"
       style={{
         height: '64px',
         borderBottom: '1px solid var(--color-line)',
@@ -30,7 +30,7 @@ export default function Topbar() {
         type="button"
         onClick={() => dispatch(openMobileNav())}
         aria-label="Open navigation menu"
-        className="lg:hidden flex items-center justify-center w-9 h-9 flex-shrink-0 rounded-[9px] border border-line-2 bg-[#141414] text-[#a3a3a3]"
+        className="dk:hidden flex items-center justify-center w-9 h-9 flex-shrink-0 rounded-[9px] border border-line-2 bg-[#141414] text-[#a3a3a3]"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <line x1="3" y1="6" x2="21" y2="6" />
@@ -48,7 +48,7 @@ export default function Topbar() {
       {/* Search — full box on lg+, icon-only button below lg.
           ml-auto pushes the right-hand cluster to the edge. */}
       <div
-        className="hidden lg:flex items-center gap-[9px] text-[#6f6f6f] text-[13px] ml-auto"
+        className="hidden dk:flex items-center gap-[9px] text-[#6f6f6f] text-[13px] ml-auto"
         style={{
           width: '280px',
           height: '36px',
@@ -81,7 +81,7 @@ export default function Topbar() {
       <button
         type="button"
         aria-label="Search"
-        className="lg:hidden flex items-center justify-center w-9 h-9 flex-shrink-0 rounded-[9px] border border-line-2 bg-[#121212] text-[#6f6f6f] ml-auto"
+        className="dk:hidden flex items-center justify-center w-9 h-9 flex-shrink-0 rounded-[9px] border border-line-2 bg-[#121212] text-[#6f6f6f] ml-auto"
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
           <circle cx="11" cy="11" r="7" />
