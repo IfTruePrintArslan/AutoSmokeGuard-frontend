@@ -198,7 +198,7 @@ export default function UploadPage() {
   const readyCount = queueItems.filter((i) => i.status === 'done').length
 
   return (
-    <div className="flex flex-col lg:h-full">
+    <div className="flex flex-col xl:h-full">
       {/* Page header */}
       <div className="page-head">
         <div>
@@ -221,7 +221,7 @@ export default function UploadPage() {
         }}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_372px] gap-4 lg:flex-1 lg:min-h-0">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_372px] gap-4 xl:flex-1 xl:min-h-0">
         {/* ── LEFT column ── */}
         <div className="flex flex-col min-h-0">
           {/* Dropzone */}
@@ -238,7 +238,7 @@ export default function UploadPage() {
           >
             <div
               className={
-                'border-[1.5px] border-dashed rounded-[11px] flex flex-col items-center justify-center h-[220px] sm:h-[260px] lg:h-[300px] px-4 text-center transition-[border-color,background] duration-150 ease-out ' +
+                'border-[1.5px] border-dashed rounded-[11px] flex flex-col items-center justify-center h-[220px] sm:h-[260px] xl:h-[300px] px-4 text-center transition-[border-color,background] duration-150 ease-out ' +
                 (dragOver ? 'border-accent bg-[rgba(250,250,250,0.04)]' : 'border-white/40')
               }
             >
@@ -269,7 +269,7 @@ export default function UploadPage() {
           </div>
 
           {/* Upload queue — shared, Redux-backed widget */}
-          <UploadQueue className="mt-4 min-h-[200px] lg:flex-1 lg:min-h-0" />
+          <UploadQueue className="mt-4 min-h-[200px] xl:flex-1 xl:min-h-0" />
         </div>
 
         {/* ── RIGHT column — Analysis settings ── */}

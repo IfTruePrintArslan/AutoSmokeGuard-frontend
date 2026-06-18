@@ -17,7 +17,7 @@ export default function AppLayout() {
      *   the sidebar is removed from flow and rendered as an off-canvas drawer.
      */
     <div
-      className="flex min-h-screen lg:h-screen lg:overflow-hidden"
+      className="flex min-h-screen min-[769px]:h-screen min-[769px]:overflow-hidden"
       style={{ background: 'var(--color-bg)' }}
     >
       <Sidebar />
@@ -25,7 +25,7 @@ export default function AppLayout() {
       {/* Backdrop — only visible while the mobile drawer is open (<lg) */}
       {mobileNavOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 min-[769px]:hidden"
           aria-hidden="true"
           onClick={() => dispatch(closeMobileNav())}
         />
@@ -36,7 +36,7 @@ export default function AppLayout() {
         <Topbar />
 
         {/* Content area — scrollable on desktop, grows naturally on mobile */}
-        <div className="flex-1 lg:overflow-auto p-4 sm:p-5 lg:px-7 lg:py-6">
+        <div className="flex-1 min-[769px]:overflow-auto p-4 sm:p-5 min-[769px]:px-7 min-[769px]:py-6">
           <Outlet />
         </div>
       </div>

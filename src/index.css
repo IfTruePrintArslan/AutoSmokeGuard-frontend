@@ -33,6 +33,7 @@
 
   /* Radius */
   --radius-card: 14px;
+
 }
 
 /* Severity translucent backgrounds + accent glow — exposed both as Tailwind
