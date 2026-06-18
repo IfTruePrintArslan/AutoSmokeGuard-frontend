@@ -1,19 +1,16 @@
 import { useSelector } from 'react-redux'
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
   ComposedChart,
+  Area,
   Line,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
-  PieChart,
-  Pie,
-  Cell,
   LineChart,
 } from 'recharts'
+import SeverityDistribution from '../components/SeverityDistribution'
 
 /* ── Dummy data ── */
 
@@ -49,13 +46,6 @@ const detectionData = [
   { day: 'May 29', detections: 21, high: 5 },
   { day: 'May 30', detections: 22, high: 6 },
 ]
-
-const donutData = [
-  { name: 'Low',      value: 149, color: '#4ade80' },
-  { name: 'Moderate', value: 67,  color: '#fbbf24' },
-  { name: 'High',     value: 32,  color: '#f87171' },
-]
-const DONUT_TOTAL = 248
 
 const sparkTotal    = [6,7,8,7,9,10,11,13,14,16,17,19,21,22].map((v) => ({ v }))
 const sparkHigh     = [4,5,4,5,3,4,4,3,3,2,2,2,1,2].map((v) => ({ v }))
@@ -96,37 +86,12 @@ function CustomLineTooltip({ active, payload, label }) {
   )
 }
 
-function CustomDonutTooltip({ active, payload }) {
-  if (!active || !payload || !payload.length) return null
-  const item = payload[0]
-  const pct = Math.round((item.value / DONUT_TOTAL) * 100)
-  return (
-    <div
-      style={{
-        background: '#1a1a1a',
-        border: '1px solid #2e2e2e',
-        borderRadius: '8px',
-        padding: '8px 10px',
-        fontFamily: 'var(--font)',
-        fontSize: '12px',
-        color: '#ededed',
-      }}
-    >
-      <span style={{ color: item.payload.color, fontWeight: 600 }}>{item.name}</span>
-      {' · '}
-      {item.value}
-      {' · '}
-      {pct}%
-    </div>
-  )
-}
-
 export default function DashboardPage() {
   const user = useSelector((s) => s.auth.user)
   const firstName = user?.name?.split(' ')[0] || 'Memoon'
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       {/* ── Page header ── */}
       <div className="page-head">
         <div>
@@ -206,10 +171,10 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Row 2: line chart + donut chart ── */}
-      <div className="grid grid-cols-[1fr_380px] gap-4 mb-4">
+      <div className="grid grid-cols-[1fr_380px] gap-4 mb-4 flex-1 min-h-0">
 
         {/* Detections over time */}
-        <div className="card">
+        <div className="card flex flex-col">
           <div className="card-head">
             <div>
               <h3>Detections over time</h3>
@@ -221,8 +186,8 @@ export default function DashboardPage() {
               <span className="text-[11.5px] py-[5px] px-[11px] text-text-2">1y</span>
             </div>
           </div>
-          <div className="w-[calc(100%-36px)] h-[230px] mt-3.5 mx-[18px]">
-            <ResponsiveContainer width="100%" height={230}>
+          <div className="w-[calc(100%-36px)] flex-1 min-h-[230px] mt-3.5 mx-[18px]">
+            <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={detectionData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
                 <defs>
                   <linearGradient id="detGradient" x1="0" y1="0" x2="0" y2="1">
@@ -265,73 +230,14 @@ export default function DashboardPage() {
         </div>
 
         {/* Severity distribution donut */}
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <h3>Severity distribution</h3>
-              <div className="sub">All-time breakdown</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-[22px] py-6 px-[22px]">
-            <div style={{ position: 'relative', width: 172, height: 172, flexShrink: 0 }}>
-              <PieChart width={172} height={172}>
-                <Pie
-                  data={donutData}
-                  cx={86}
-                  cy={86}
-                  innerRadius={58}
-                  outerRadius={80}
-                  paddingAngle={2}
-                  dataKey="value"
-                  stroke="none"
-                  startAngle={90}
-                  endAngle={-270}
-                >
-                  {donutData.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomDonutTooltip />} />
-              </PieChart>
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  textAlign: 'center',
-                  pointerEvents: 'none',
-                  lineHeight: 1.2,
-                }}
-              >
-                <div style={{ fontSize: '26px', fontWeight: 650, color: '#ededed', fontFamily: 'var(--font)', letterSpacing: '-.03em' }}>248</div>
-                <div style={{ fontSize: '11px', color: '#6f6f6f', fontFamily: 'var(--font)' }}>analyses</div>
-              </div>
-            </div>
-            <div className="flex-1 flex flex-col gap-[13px]">
-              <div className="flex items-center">
-                <span className="sev sev-low"><i></i>Low</span>
-                <b className="mono ml-auto font-semibold">149</b>
-                <em className="not-italic text-muted text-[11.5px] w-[38px] text-right">60%</em>
-              </div>
-              <div className="flex items-center">
-                <span className="sev sev-mod"><i></i>Moderate</span>
-                <b className="mono ml-auto font-semibold">67</b>
-                <em className="not-italic text-muted text-[11.5px] w-[38px] text-right">27%</em>
-              </div>
-              <div className="flex items-center">
-                <span className="sev sev-high"><i></i>High</span>
-                <b className="mono ml-auto font-semibold">32</b>
-                <em className="not-italic text-muted text-[11.5px] w-[38px] text-right">13%</em>
-              </div>
-            </div>
-          </div>
+        <div className="min-h-0">
+          <SeverityDistribution className="h-full" />
         </div>
 
       </div>
 
       {/* ── Row 3: recent analyses table + processing queue ── */}
-      <div className="grid grid-cols-[1fr_380px] gap-4">
+      <div className="grid grid-cols-[1fr_380px] gap-4 items-stretch">
 
         {/* Recent analyses */}
         <div className="card">
