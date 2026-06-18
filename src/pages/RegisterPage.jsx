@@ -41,11 +41,11 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-bg">
+    <div className="flex flex-col md:flex-row min-h-screen w-full bg-bg">
       <AuthHero />
 
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-[380px]">
+      <div className="flex-1 flex items-center justify-center px-6 py-10 sm:px-8">
+        <div className="w-full max-w-[380px]">
           <h1 className="text-[24px] font-[660] tracking-[-0.02em]">Create your account</h1>
           <p className="text-text-2 text-[13.5px] mt-[7px] mb-7">Start analyzing vehicle emissions.</p>
 
