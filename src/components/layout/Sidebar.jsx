@@ -96,16 +96,27 @@ function IconChevronRight() {
   )
 }
 
+/* ---------- Styled hover tooltip ---------- */
+function RailTooltip({ label }) {
+  return (
+    <span
+      role="tooltip"
+      className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 whitespace-nowrap rounded-md border border-[#2e2e2e] bg-[#1a1a1a] px-2 py-1 text-[12px] font-medium text-[#ededed] opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 z-[60]"
+    >
+      {label}
+    </span>
+  )
+}
+
 /* ---------- NavLink helper ---------- */
 function SideNavLink({ to, icon, children, badge, onNavigate, collapsed }) {
   return (
     <NavLink
       to={to}
       onClick={onNavigate}
-      title={collapsed ? String(children) : undefined}
       className={({ isActive }) =>
         [
-          'flex items-center gap-[11px] px-[10px] py-[9px] rounded-[9px] no-underline font-medium text-[13.5px] mb-[2px] transition-colors',
+          'relative group flex items-center gap-[11px] px-[10px] py-[9px] rounded-[9px] no-underline font-medium text-[13.5px] mb-[2px] transition-colors',
           collapsed ? 'min-[769px]:justify-center' : '',
           isActive
             ? 'bg-[#1d1d1d] text-[#fafafa] font-semibold [&_svg]:opacity-100'
@@ -127,6 +138,7 @@ function SideNavLink({ to, icon, children, badge, onNavigate, collapsed }) {
           {badge}
         </span>
       )}
+      <RailTooltip label={String(children)} />
     </NavLink>
   )
 }
@@ -198,9 +210,12 @@ export default function Sidebar() {
             : 'gap-[10px] px-[10px]',
         ].join(' ')}
       >
-        {/* Shield logo mark — always visible */}
+        {/* Shield logo mark — hidden at ≥769px when collapsed */}
         <div
-          className="flex items-center justify-center rounded-[10px] bg-[#fafafa]"
+          className={[
+            'flex items-center justify-center rounded-[10px] bg-[#fafafa]',
+            collapsed ? 'min-[769px]:hidden' : '',
+          ].join(' ')}
           style={{ width: '34px', height: '34px', flexShrink: 0 }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
@@ -222,7 +237,7 @@ export default function Sidebar() {
           onClick={() => dispatch(toggleSidebarCollapse())}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className={[
-            'hidden min-[769px]:flex items-center justify-center rounded-[7px] text-[#6f6f6f]',
+            'relative group hidden min-[769px]:flex items-center justify-center rounded-[7px] text-[#6f6f6f]',
             'hover:text-[#a3a3a3] hover:bg-[#1a1a1a] transition-colors',
             // When expanded: push it to the far right with ml-auto
             collapsed ? 'ml-[6px]' : 'ml-auto',
@@ -237,6 +252,7 @@ export default function Sidebar() {
           }}
         >
           {collapsed ? <IconChevronRight /> : <IconChevronLeft />}
+          <RailTooltip label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} />
         </button>
       </div>
 
@@ -312,9 +328,12 @@ export default function Sidebar() {
             background: '#141414',
           }}
         >
-          {/* Avatar — always visible */}
+          {/* Avatar — hidden at ≥769px when collapsed */}
           <div
-            className="flex items-center justify-center rounded-full text-[12px] font-semibold text-white"
+            className={[
+              'flex items-center justify-center rounded-full text-[12px] font-semibold text-white',
+              collapsed ? 'min-[769px]:hidden' : '',
+            ].join(' ')}
             style={{ width: '32px', height: '32px', background: '#3a3a3a', flexShrink: 0 }}
           >
             {initials}
@@ -335,8 +354,8 @@ export default function Sidebar() {
           {/* Logout button — hidden at ≥769px when collapsed */}
           <button
             onClick={handleLogout}
-            title="Sign out"
-            className={collapsed ? 'min-[769px]:hidden' : undefined}
+            aria-label="Sign out"
+            className="relative group"
             style={{
               flexShrink: 0,
               width: '28px',
@@ -361,6 +380,7 @@ export default function Sidebar() {
             }}
           >
             <IconLogout />
+            <RailTooltip label="Sign out" />
           </button>
         </div>
       </div>
