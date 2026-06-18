@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { logout } from '../../features/auth/authSlice'
-import { closeMobileNav } from '../../features/ui/uiSlice'
+import { closeMobileNav, toggleSidebarCollapse } from '../../features/ui/uiSlice'
 
 /* ---------- SVG Icons (verbatim from 02_dashboard.html, JSX-ified) ---------- */
 
@@ -78,15 +78,35 @@ function IconLogout() {
   )
 }
 
+/* Chevron-left icon for the collapse toggle */
+function IconChevronLeft() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  )
+}
+
+/* Chevron-right icon for the expand toggle */
+function IconChevronRight() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18l6-6-6-6" />
+    </svg>
+  )
+}
+
 /* ---------- NavLink helper ---------- */
-function SideNavLink({ to, icon, children, badge, onNavigate }) {
+function SideNavLink({ to, icon, children, badge, onNavigate, collapsed }) {
   return (
     <NavLink
       to={to}
       onClick={onNavigate}
+      title={collapsed ? String(children) : undefined}
       className={({ isActive }) =>
         [
           'flex items-center gap-[11px] px-[10px] py-[9px] rounded-[9px] no-underline font-medium text-[13.5px] mb-[2px] transition-colors',
+          collapsed ? 'min-[769px]:justify-center' : '',
           isActive
             ? 'bg-[#1d1d1d] text-[#fafafa] font-semibold [&_svg]:opacity-100'
             : 'text-[#a3a3a3] [&_svg]:opacity-75',
@@ -94,10 +114,15 @@ function SideNavLink({ to, icon, children, badge, onNavigate }) {
       }
     >
       {icon}
-      {children}
+      <span className={collapsed ? 'min-[769px]:hidden' : undefined}>
+        {children}
+      </span>
       {badge && (
         <span
-          className="ml-auto text-[10.5px] font-semibold bg-[#262626] text-[#a3a3a3] px-[7px] py-[2px] rounded-full"
+          className={[
+            'ml-auto text-[10.5px] font-semibold bg-[#262626] text-[#a3a3a3] px-[7px] py-[2px] rounded-full',
+            collapsed ? 'min-[769px]:hidden' : '',
+          ].join(' ')}
         >
           {badge}
         </span>
@@ -112,6 +137,7 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const user = useSelector((state) => state.auth.user)
   const mobileNavOpen = useSelector((state) => state.ui.mobileNavOpen)
+  const collapsed = useSelector((state) => state.ui.sidebarCollapsed)
 
   const closeNav = () => dispatch(closeMobileNav())
 
@@ -145,11 +171,17 @@ export default function Sidebar() {
   return (
     <aside
       className={[
-        'flex flex-col w-[236px] flex-shrink-0 px-[14px] py-5',
-        // <lg : off-canvas drawer
+        // Base: always full width; on ≥769px collapsed → shrink to rail
+        'flex flex-col flex-shrink-0 py-5',
+        collapsed
+          ? 'w-[236px] min-[769px]:w-[68px] px-[14px] min-[769px]:px-[10px]'
+          : 'w-[236px] px-[14px]',
+        // Width + padding animate
+        'transition-[width,padding] duration-200 ease-out',
+        // <769px : off-canvas drawer
         'fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out',
         mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
-        // lg+ : static in-flow rail
+        // ≥769px : static in-flow rail
         'min-[769px]:static min-[769px]:translate-x-0 min-[769px]:z-auto',
       ].join(' ')}
       style={{
@@ -157,8 +189,16 @@ export default function Sidebar() {
         background: '#0e0e0e',
       }}
     >
-      {/* Logo */}
-      <div className="flex items-center gap-[10px] px-[10px] pb-[22px] pt-[4px]">
+      {/* Logo header */}
+      <div
+        className={[
+          'flex items-center pb-[22px] pt-[4px]',
+          collapsed
+            ? 'min-[769px]:justify-center px-[2px] gap-0 min-[769px]:gap-0'
+            : 'gap-[10px] px-[10px]',
+        ].join(' ')}
+      >
+        {/* Shield logo mark — always visible */}
         <div
           className="flex items-center justify-center rounded-[10px] bg-[#fafafa]"
           style={{ width: '34px', height: '34px', flexShrink: 0 }}
@@ -168,51 +208,88 @@ export default function Sidebar() {
             <path d="m9 12 2 2 4-4.5" />
           </svg>
         </div>
-        <div>
+
+        {/* Logo text — hidden at ≥769px when collapsed */}
+        <div className={collapsed ? 'min-[769px]:hidden' : undefined}>
           <div className="font-bold text-[14.5px] leading-none tracking-[-0.02em]">
             AutoSmoke<span className="text-[#a3a3a3]">Guard</span>
           </div>
           <div className="text-[10.5px] text-[#6f6f6f] mt-[1px]">Emission monitoring</div>
         </div>
+
+        {/* Collapse/expand toggle — only visible at ≥769px */}
+        <button
+          onClick={() => dispatch(toggleSidebarCollapse())}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className={[
+            'hidden min-[769px]:flex items-center justify-center rounded-[7px] text-[#6f6f6f]',
+            'hover:text-[#a3a3a3] hover:bg-[#1a1a1a] transition-colors',
+            // When expanded: push it to the far right with ml-auto
+            collapsed ? 'ml-[6px]' : 'ml-auto',
+          ].join(' ')}
+          style={{
+            width: '28px',
+            height: '28px',
+            flexShrink: 0,
+            border: '1px solid var(--color-line)',
+            background: 'transparent',
+            cursor: 'pointer',
+          }}
+        >
+          {collapsed ? <IconChevronRight /> : <IconChevronLeft />}
+        </button>
       </div>
 
-      {/* Workspace nav group */}
-      <div className="text-[10.5px] font-semibold tracking-[0.09em] uppercase text-[#6f6f6f] px-[10px] pt-[14px] pb-[8px]">
+      {/* Workspace section label — hidden at ≥769px when collapsed */}
+      <div
+        className={[
+          'text-[10.5px] font-semibold tracking-[0.09em] uppercase text-[#6f6f6f] px-[10px] pt-[14px] pb-[8px]',
+          collapsed ? 'min-[769px]:hidden' : '',
+        ].join(' ')}
+      >
         Workspace
       </div>
       <nav className="flex flex-col">
-        <SideNavLink to="/dashboard" icon={<IconDashboard />} onNavigate={closeNav}>
+        <SideNavLink to="/dashboard" icon={<IconDashboard />} onNavigate={closeNav} collapsed={collapsed}>
           Dashboard
         </SideNavLink>
-        <SideNavLink to="/upload" icon={<IconUpload />} onNavigate={closeNav}>
+        <SideNavLink to="/upload" icon={<IconUpload />} onNavigate={closeNav} collapsed={collapsed}>
           Upload
         </SideNavLink>
-        <SideNavLink to="/analysis" icon={<IconAnalysis />} badge="2 running" onNavigate={closeNav}>
+        <SideNavLink to="/analysis" icon={<IconAnalysis />} badge="2 running" onNavigate={closeNav} collapsed={collapsed}>
           Live Analysis
         </SideNavLink>
-        <SideNavLink to="/reports" icon={<IconReports />} onNavigate={closeNav}>
+        <SideNavLink to="/reports" icon={<IconReports />} onNavigate={closeNav} collapsed={collapsed}>
           Reports
         </SideNavLink>
-        <SideNavLink to="/history" icon={<IconHistory />} onNavigate={closeNav}>
+        <SideNavLink to="/history" icon={<IconHistory />} onNavigate={closeNav} collapsed={collapsed}>
           History
         </SideNavLink>
       </nav>
 
-      {/* System nav group */}
-      <div className="text-[10.5px] font-semibold tracking-[0.09em] uppercase text-[#6f6f6f] px-[10px] pt-[14px] pb-[8px]">
+      {/* System section label — hidden at ≥769px when collapsed */}
+      <div
+        className={[
+          'text-[10.5px] font-semibold tracking-[0.09em] uppercase text-[#6f6f6f] px-[10px] pt-[14px] pb-[8px]',
+          collapsed ? 'min-[769px]:hidden' : '',
+        ].join(' ')}
+      >
         System
       </div>
       <nav className="flex flex-col">
-        <SideNavLink to="/settings" icon={<IconSettings />} onNavigate={closeNav}>
+        <SideNavLink to="/settings" icon={<IconSettings />} onNavigate={closeNav} collapsed={collapsed}>
           Settings
         </SideNavLink>
       </nav>
 
       {/* Footer */}
       <div className="mt-auto">
-        {/* Upgrade card */}
+        {/* Upgrade card — hidden at ≥769px when collapsed */}
         <div
-          className="rounded-[12px] p-[13px] mb-[14px]"
+          className={[
+            'rounded-[12px] p-[13px] mb-[14px]',
+            collapsed ? 'min-[769px]:hidden' : '',
+          ].join(' ')}
           style={{
             border: '1px solid var(--color-line-2)',
             background: '#141414',
@@ -224,28 +301,42 @@ export default function Sidebar() {
           </p>
         </div>
 
-        {/* User card with logout button */}
+        {/* User card */}
         <div
-          className="flex items-center gap-[10px] p-[10px] rounded-[10px]"
+          className={[
+            'flex items-center p-[10px] rounded-[10px]',
+            collapsed ? 'min-[769px]:justify-center gap-0' : 'gap-[10px]',
+          ].join(' ')}
           style={{
             border: '1px solid var(--color-line)',
             background: '#141414',
           }}
         >
+          {/* Avatar — always visible */}
           <div
             className="flex items-center justify-center rounded-full text-[12px] font-semibold text-white"
             style={{ width: '32px', height: '32px', background: '#3a3a3a', flexShrink: 0 }}
           >
             {initials}
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
+
+          {/* Name + email — hidden at ≥769px when collapsed */}
+          <div
+            className={[
+              'min-w-0',
+              collapsed ? 'min-[769px]:hidden' : '',
+            ].join(' ')}
+            style={{ flex: 1 }}
+          >
             <b className="block text-[12.5px] font-semibold truncate">{displayName}</b>
             <span className="text-[11px] text-[#6f6f6f] truncate block">{displaySub}</span>
           </div>
-          {/* Logout icon button */}
+
+          {/* Logout button — hidden at ≥769px when collapsed */}
           <button
             onClick={handleLogout}
             title="Sign out"
+            className={collapsed ? 'min-[769px]:hidden' : undefined}
             style={{
               flexShrink: 0,
               width: '28px',
