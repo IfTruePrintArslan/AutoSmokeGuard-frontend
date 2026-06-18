@@ -3,7 +3,7 @@
 export default function AuthHero() {
   return (
     <div
-      className="w-[54%] py-12 px-14 flex flex-col relative overflow-hidden text-white border-r border-line"
+      className="hidden md:flex w-full md:w-[54%] py-12 px-14 flex-col relative overflow-hidden text-white border-r border-line"
       style={{
         background:
           'radial-gradient(800px 600px at 20% -10%, rgba(255,255,255,.03), transparent 55%), radial-gradient(700px 500px at 110% 80%, rgba(255,255,255,.02), transparent 55%), #101010',
