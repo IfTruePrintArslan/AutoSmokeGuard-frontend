@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import '../styles/upload.css'
 
 /* ─────────────────────────────────────────────
    Constants & validation
@@ -112,31 +111,43 @@ function IconCheck() {
 ───────────────────────────────────────────── */
 
 function FileRow({ entry, onRemove }) {
-  const dimClass  = entry.dim ? ' dim' : ''
-  const errClass  = entry.status === 'err' ? ' err' : ''
+  const isErr = entry.status === 'err'
+  // visual icon-state: err rows render as the "q" (paused) icon box
+  const iconState = isErr ? 'q' : entry.status
 
   return (
-    <div className={`f-row${dimClass}${errClass}`}>
+    <div className={`flex gap-3.5 items-start${entry.dim ? ' opacity-55' : ''}`}>
       {/* icon */}
-      <div className={`f-ic ${entry.status === 'err' ? 'q' : entry.status}`}>
-        {entry.status === 'ok' && <IconCheck />}
+      <div
+        className={
+          'w-[34px] h-[34px] rounded-[9px] flex-shrink-0 flex items-center justify-center mt-0.5 relative' +
+          (iconState === 'ok' ? ' bg-low-bg text-low' : '') +
+          (iconState === 'run' ? ' bg-accent-glow' : '') +
+          (iconState === 'q' ? ' bg-[rgba(148,163,184,0.1)]' : '')
+        }
+      >
+        {iconState === 'ok' && <IconCheck />}
+        {iconState === 'run' && (
+          <span className="block w-[14px] h-[14px] rounded-[99px] border-[2.5px] border-white/25 border-t-accent animate-spin [animation-duration:0.7s]" />
+        )}
+        {iconState === 'q' && <span className="text-muted text-[12px]">⏸</span>}
       </div>
 
       {/* info */}
-      <div className="f-info">
-        <div className="f-name">
-          <b>{entry.name}</b>
-          <span className="mono">{entry.sizeLabel}</span>
+      <div className="flex-1">
+        <div className="flex justify-between text-[13px]">
+          <b className={`font-[550]${isErr ? ' text-high' : ''}`}>{entry.name}</b>
+          <span className="mono text-muted text-[12px]">{entry.sizeLabel}</span>
         </div>
 
-        {entry.status === 'err' ? (
-          <div className="f-err">{entry.errMsg}</div>
+        {isErr ? (
+          <div className="text-[11.5px] text-high mt-1">{entry.errMsg}</div>
         ) : (
           <>
-            <div className="bar">
-              <i style={{ width: `${entry.progress}%`, background: entry.barColor }} />
+            <div className="h-1.5 rounded-[99px] bg-[rgba(148,163,184,0.12)] mt-2 mb-1.5 overflow-hidden">
+              <i className="block h-full rounded-[99px] transition-[width] duration-[120ms] ease-linear" style={{ width: `${entry.progress}%`, background: entry.barColor }} />
             </div>
-            <div className="f-sub">{entry.sub}</div>
+            <div className="text-[11.5px] text-muted">{entry.sub}</div>
           </>
         )}
       </div>
@@ -144,7 +155,7 @@ function FileRow({ entry, onRemove }) {
       {/* remove — only on real (non-seed) rows */}
       {!entry.seed && (
         <button
-          className="f-remove"
+          className="bg-transparent border-none text-muted cursor-pointer text-[14px] leading-none py-1 px-1.5 rounded-[6px] flex-shrink-0 mt-0.5 transition-colors font-sans hover:text-high hover:bg-high-bg"
           type="button"
           title="Remove"
           onClick={() => onRemove(entry.id)}
@@ -164,11 +175,19 @@ function Switch({ on, onToggle }) {
   return (
     <button
       type="button"
-      className={`switch${on ? ' on' : ''}`}
+      className={
+        'w-[36px] h-[21px] rounded-[99px] relative flex-shrink-0 cursor-pointer border-none p-0 ' +
+        (on ? 'bg-[#fafafa]' : 'bg-[rgba(148,163,184,0.25)]')
+      }
       onClick={onToggle}
       aria-pressed={on}
     >
-      <i />
+      <i
+        className={
+          'absolute top-[2.5px] w-[16px] h-[16px] rounded-[99px] block transition-[left,background] duration-[150ms] ease-in-out ' +
+          (on ? 'left-[17px] bg-[#0a0a0a]' : 'left-[3px] bg-[#cbd5e1]')
+        }
+      />
     </button>
   )
 }
@@ -331,12 +350,12 @@ export default function UploadPage() {
         }}
       />
 
-      <div className="up-grid">
+      <div className="grid grid-cols-[1fr_372px] gap-4">
         {/* ── LEFT column ── */}
         <div>
           {/* Dropzone */}
           <div
-            className="card drop"
+            className="card p-2.5 cursor-pointer"
             onClick={openPicker}
             onDragEnter={onDragEnter}
             onDragOver={onDragOver}
@@ -346,12 +365,17 @@ export default function UploadPage() {
             tabIndex={0}
             onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openPicker()}
           >
-            <div className={`drop-inner${dragOver ? ' drag-over' : ''}`}>
-              <div className="drop-ic">
+            <div
+              className={
+                'border-[1.5px] border-dashed rounded-[11px] flex flex-col items-center justify-center h-[300px] text-center transition-[border-color,background] duration-150 ease-out ' +
+                (dragOver ? 'border-accent bg-[rgba(250,250,250,0.04)]' : 'border-white/40')
+              }
+            >
+              <div className="w-[58px] h-[58px] rounded-[16px] bg-accent-glow text-accent flex items-center justify-center mb-[18px] shadow-[0_0_0_8px_rgba(255,255,255,0.05)]">
                 <IconUpload />
               </div>
-              <h3>Drag &amp; drop traffic footage</h3>
-              <p>
+              <h3 className="text-[16.5px] font-[620]">Drag &amp; drop traffic footage</h3>
+              <p className="text-[13px] text-text-2 mt-[7px]">
                 or{' '}
                 <a
                   className="link"
@@ -362,26 +386,26 @@ export default function UploadPage() {
                 </a>{' '}
                 from your computer
               </p>
-              <div className="chips">
-                <span>MP4</span>
-                <span>AVI</span>
-                <span>MOV</span>
-                <span>JPEG</span>
-                <span>PNG</span>
-                <em>· up to 2 GB</em>
+              <div className="flex items-center gap-2 mt-5">
+                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">MP4</span>
+                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">AVI</span>
+                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">MOV</span>
+                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">JPEG</span>
+                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">PNG</span>
+                <em className="not-italic text-[11.5px] text-muted ml-1">· up to 2 GB</em>
               </div>
             </div>
           </div>
 
           {/* Upload queue */}
-          <div className="card" style={{ marginTop: '16px' }}>
+          <div className="card mt-4">
             <div className="card-head">
               <h3>Upload queue</h3>
-              <span style={{ fontSize: '12px', color: 'var(--text-2)' }}>
+              <span className="text-[12px] text-text-2">
                 {fileCount} file{fileCount !== 1 ? 's' : ''} · {totalLabel} total
               </span>
             </div>
-            <div className="files">
+            <div className="pt-2 pb-4 px-[18px] flex flex-col gap-4">
               {/* Seed rows — always rendered first */}
               {SEED_FILES.map((entry) => (
                 <FileRow key={entry.id} entry={entry} onRemove={removeFile} />
@@ -395,69 +419,68 @@ export default function UploadPage() {
         </div>
 
         {/* ── RIGHT column — Analysis settings ── */}
-        <div className="card settings">
+        <div className="card">
           <div className="card-head">
             <h3>Analysis settings</h3>
           </div>
-          <div className="set-body">
-            <label>Detection model</label>
-            <div className="input sel">
-              YOLOv8-seg · v2.3 <i>▾</i>
+          <div className="pt-1.5 pb-[18px] px-[18px]">
+            <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Detection model</label>
+            <div className="h-10 border border-line-2 rounded-[9px] bg-bg-2 flex items-center px-[13px] text-[13px] text-text">
+              YOLOv8-seg · v2.3 <i className="ml-auto not-italic text-muted text-[11px]">▾</i>
             </div>
 
-            <label>Smoke sensitivity</label>
-            <div className="slider">
-              <div className="sl-track">
-                <i style={{ width: '68%' }} />
-                <span className="sl-knob" style={{ left: '68%' }} />
+            <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Smoke sensitivity</label>
+            <div className="pt-1.5 px-0.5">
+              <div className="h-[5px] rounded-[99px] bg-[rgba(148,163,184,0.15)] relative">
+                <i className="absolute left-0 top-0 h-full rounded-[99px] bg-[#e5e5e5] block" style={{ width: '68%' }} />
+                <span className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-[15px] h-[15px] rounded-[99px] bg-[#fafafa] shadow-[0_0_0_4px_rgba(255,255,255,0.25)]" style={{ left: '68%' }} />
               </div>
-              <div className="sl-marks">
+              <div className="flex justify-between text-[10.5px] text-muted mt-[9px]">
                 <span>Low</span>
                 <span>Balanced</span>
                 <span>Strict</span>
               </div>
             </div>
 
-            <label>Frame sampling</label>
-            <div className="input sel">
-              Every 5th frame <i>▾</i>
+            <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Frame sampling</label>
+            <div className="h-10 border border-line-2 rounded-[9px] bg-bg-2 flex items-center px-[13px] text-[13px] text-text">
+              Every 5th frame <i className="ml-auto not-italic text-muted text-[11px]">▾</i>
             </div>
 
-            <div className="toggles">
-              <div className="tg">
+            <div className="mt-[22px] flex flex-col gap-[15px]">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <b>Auto-generate PDF report</b>
-                  <span>Create report when analysis completes</span>
+                  <b className="text-[12.5px] font-[550] block">Auto-generate PDF report</b>
+                  <span className="text-[11px] text-muted">Create report when analysis completes</span>
                 </div>
                 <Switch on={pdfReport} onToggle={() => setPdfReport((v) => !v)} />
               </div>
-              <div className="tg">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <b>License plate redaction</b>
-                  <span>Blur plates in exported frames</span>
+                  <b className="text-[12.5px] font-[550] block">License plate redaction</b>
+                  <span className="text-[11px] text-muted">Blur plates in exported frames</span>
                 </div>
                 <Switch on={plateRedact} onToggle={() => setPlateRedact((v) => !v)} />
               </div>
-              <div className="tg">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <b>Night-mode enhancement</b>
-                  <span>Boost contrast for low-light footage</span>
+                  <b className="text-[12.5px] font-[550] block">Night-mode enhancement</b>
+                  <span className="text-[11px] text-muted">Boost contrast for low-light footage</span>
                 </div>
                 <Switch on={nightMode} onToggle={() => setNightMode((v) => !v)} />
               </div>
             </div>
 
             <button
-              className="btn btn-pri"
+              className="btn btn-pri w-full h-[42px] justify-center mt-[22px]"
               type="button"
-              style={{ width: '100%', height: '42px', justifyContent: 'center', marginTop: '22px' }}
             >
               Start analysis
             </button>
 
-            <p className="eta">
+            <p className="text-[11.5px] text-muted text-center mt-3">
               Estimated processing time:{' '}
-              <b>~{readyCount < 3 ? '2 min' : `${Math.ceil(readyCount * 0.8)} min`}</b>{' '}
+              <b className="text-text-2">~{readyCount < 3 ? '2 min' : `${Math.ceil(readyCount * 0.8)} min`}</b>{' '}
               for {readyCount} ready file{readyCount !== 1 ? 's' : ''}
             </p>
           </div>
