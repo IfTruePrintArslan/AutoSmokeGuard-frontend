@@ -3,9 +3,10 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { login } from '../features/auth/authSlice'
 import AuthHero from '../components/auth/AuthHero'
+import { validateEmail, validatePassword } from '../lib/validation'
 
-const INPUT_CLS =
-  'h-[42px] w-full border border-line-2 rounded-[9px] bg-surface flex items-center px-[14px] text-[13.5px] mb-[18px] text-text font-[inherit] outline-none transition-[border-color] duration-150 placeholder:text-muted focus:border-line-2 focus:shadow-[0_0_0_2px_rgba(250,250,250,0.06)]'
+const inputCls = (hasError) =>
+  `h-[42px] w-full border rounded-[9px] bg-surface flex items-center px-[14px] text-[13.5px] text-text font-[inherit] outline-none transition-[border-color] duration-150 placeholder:text-muted ${hasError ? 'border-[#f87171] mb-1.5 focus:border-[#f87171]' : 'border-line-2 mb-[18px] focus:border-line-2 focus:shadow-[0_0_0_2px_rgba(250,250,250,0.06)]'}`
 
 export default function LoginPage() {
   const dispatch = useDispatch()
@@ -15,15 +16,21 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [inlineError, setInlineError] = useState('')
+  const [errors, setErrors] = useState({})
 
   const isPending = status === 'pending'
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!email.trim() || !password.trim()) {
-      setInlineError('Please enter your email and password.')
+    const nextErrors = {
+      email: validateEmail(email),
+      password: validatePassword(password, false),
+    }
+    if (nextErrors.email || nextErrors.password) {
+      setErrors(nextErrors)
       return
     }
+    setErrors({})
     setInlineError('')
     const result = await dispatch(login({ email: email.trim(), password }))
     if (login.fulfilled.match(result)) {
@@ -47,32 +54,34 @@ export default function LoginPage() {
             <input
               id="login-email"
               type="email"
-              className={INPUT_CLS}
+              className={inputCls(!!errors.email)}
               placeholder="hamza@transport.gov.pk"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setErrors((prev) => ({ ...prev, email: '' })) }}
+              onBlur={() => setErrors((prev) => ({ ...prev, email: validateEmail(email) }))}
               autoComplete="email"
+              aria-invalid={!!errors.email}
             />
+            {errors.email && <p className="text-[12px] text-[#f87171] mt-1.5 mb-3">{errors.email}</p>}
 
             <label htmlFor="login-password" className="block text-[12.5px] font-[560] mb-[7px] text-[#d4d4d4]">
               Password
-              <a
-                className="link float-right text-[12px] font-medium"
-                href="#"
-                onClick={(e) => e.preventDefault()}
-              >
+              <Link to="/forgot-password" className="link float-right text-[12px] font-medium">
                 Forgot password?
-              </a>
+              </Link>
             </label>
             <input
               id="login-password"
               type="password"
-              className={INPUT_CLS}
+              className={inputCls(!!errors.password)}
               placeholder="••••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => { setPassword(e.target.value); setErrors((prev) => ({ ...prev, password: '' })) }}
+              onBlur={() => setErrors((prev) => ({ ...prev, password: validatePassword(password, false) }))}
               autoComplete="current-password"
+              aria-invalid={!!errors.password}
             />
+            {errors.password && <p className="text-[12px] text-[#f87171] mt-1.5 mb-3">{errors.password}</p>}
 
             {inlineError && <p className="text-[12px] text-[#f87171] mb-3 -mt-2.5">{inlineError}</p>}
 
