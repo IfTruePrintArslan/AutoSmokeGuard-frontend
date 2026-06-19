@@ -3,6 +3,7 @@ import AppLayout from './components/layout/AppLayout'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import DashboardPage from './pages/DashboardPage'
 import UploadPage from './pages/UploadPage'
 import AnalysisPage from './pages/AnalysisPage'
@@ -16,6 +17,7 @@ function App() {
       {/* Public auth routes — outside AppLayout */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
       {/* Protected: token required, else bounce to /login */}
       <Route element={<ProtectedRoute />}>
