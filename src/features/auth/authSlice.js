@@ -16,9 +16,9 @@ const initialState = {
 
 function extractRejection(err) {
   if (err instanceof ApiError) {
-    return { detail: err.detail, code: err.code, errors: err.fieldErrors }
+    return { detail: err.detail, code: err.code, status: err.status, errors: err.fieldErrors }
   }
-  return { detail: err?.message || 'Something went wrong.', code: null, errors: {} }
+  return { detail: err?.message || 'Something went wrong.', code: null, status: null, errors: {} }
 }
 
 export const register = createAsyncThunk(

@@ -80,6 +80,19 @@ describe('ReportsPage', () => {
     expect(screen.getByText('Unknown')).toBeInTheDocument()
   })
 
+  it('does not throw when a report has no nested analysis (deleted/orphaned report)', async () => {
+    const orphanedRow = { ...reportRow, report_id: 'r3', analysis_id: null, analysis: null }
+    api.apiGet.mockResolvedValueOnce({
+      count: 1, page: 1, pages: 1, page_size: 10, results: [orphanedRow],
+    })
+
+    renderReportsPage()
+
+    expect(await screen.findByText('#r3')).toBeInTheDocument()
+    expect(screen.getByText('Unknown')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /view analysis/i })).not.toBeInTheDocument()
+  })
+
   it('shows the empty state when count is 0', async () => {
     api.apiGet.mockResolvedValueOnce({ count: 0, page: 1, pages: 1, page_size: 10, results: [] })
 

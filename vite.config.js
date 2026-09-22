@@ -46,6 +46,11 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.js',
     globals: true,
+    // Playwright owns everything under e2e/ (its specs use @playwright/test's
+    // own runner, not vitest, and rely on a real browser + the live dev
+    // stack) — vitest's default include glob would otherwise pick them up
+    // too and fail to import them.
+    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
     // Node 25 ships an experimental global `localStorage` (Web Storage API)
     // that shadows jsdom's own implementation and lacks methods like
     // `.clear()`. Disable it in test workers so jsdom's localStorage wins.

@@ -117,13 +117,13 @@ export default function ReportsPage() {
                   <tr key={report.report_id}>
                     <td className="mono">#{shortId(report.report_id)}</td>
                     <td className="truncate max-w-[220px]">
-                      {report.analysis.media.filename}
+                      {report.analysis?.media?.filename || '—'}
                     </td>
                     <td className="text-text-2">{fmtDate(report.generated_at)}</td>
                     <td className="mono">{report.page_count ?? '—'}</td>
                     <td className="mono">{fmtBytes(report.file_size_bytes)}</td>
                     <td>
-                      <SeverityBadge severity={report.analysis.overall_severity} />
+                      <SeverityBadge severity={report.analysis?.overall_severity} />
                     </td>
                     <td>
                       <div className="flex items-center gap-3">

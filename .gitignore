@@ -21,5 +21,11 @@ yarn-debug.log*
 # test
 coverage/
 
+# playwright
+e2e/__screenshots__/
+e2e/.auth/
+test-results/
+playwright-report/
+
 # claude code
 .claude/

@@ -5,7 +5,7 @@ import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import { MemoryRouter } from 'react-router-dom'
 import HistoryPage from '../HistoryPage'
-import historyReducer from '../../features/history/historySlice'
+import historyReducer, { setPage } from '../../features/history/historySlice'
 import * as api from '../../lib/api'
 
 vi.mock('../../lib/api', async () => {
@@ -18,15 +18,16 @@ vi.mock('../../lib/api', async () => {
   }
 })
 
-function renderHistoryPage() {
-  const store = configureStore({ reducer: { history: historyReducer } })
-  return render(
+function renderHistoryPage(initialEntry = '/history', preloadedState) {
+  const store = configureStore({ reducer: { history: historyReducer }, preloadedState })
+  const utils = render(
     <Provider store={store}>
-      <MemoryRouter initialEntries={['/history']}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <HistoryPage />
       </MemoryRouter>
     </Provider>
   )
+  return { store, ...utils }
 }
 
 const paginatedRow = {
@@ -67,6 +68,26 @@ describe('HistoryPage', () => {
     expect(screen.getByText('High')).toBeInTheDocument()
   })
 
+  it('labels the count column "Vehicle detections" (not "Vehicles") and explains it via a tooltip', async () => {
+    api.apiGet.mockResolvedValueOnce({
+      count: 1,
+      page: 1,
+      pages: 1,
+      page_size: 10,
+      results: [paginatedRow],
+    })
+
+    renderHistoryPage()
+
+    expect(await screen.findByText('Vehicle detections')).toBeInTheDocument()
+    expect(screen.queryByText('Vehicles', { selector: 'th' })).not.toBeInTheDocument()
+
+    const tooltipTrigger = screen.getByRole('button', { name: /what does "vehicle detections" mean/i })
+    expect(tooltipTrigger).toHaveAttribute('aria-describedby')
+    const tooltipId = tooltipTrigger.getAttribute('aria-describedby')
+    expect(document.getElementById(tooltipId)).toHaveTextContent(/detections across sampled frames, not unique vehicles/i)
+  })
+
   it('shows the empty state when count is 0', async () => {
     api.apiGet.mockResolvedValueOnce({ count: 0, page: 1, pages: 1, page_size: 10, results: [] })
 
@@ -74,6 +95,28 @@ describe('HistoryPage', () => {
 
     expect(await screen.findByText(/no analyses yet/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /upload media/i })).toBeInTheDocument()
+  })
+
+  it('hydrates filters, page, and page size from the URL on mount (D30)', async () => {
+    // The only pre-existing filter test mounted at plain `/history` — the
+    // URL-hydration effect (`didHydrateRef`) never actually ran under that,
+    // so a regression there would not have been caught. Hydrating three
+    // separate pieces of state (filters, page, pageSize) can trigger more
+    // than one fetch as each lands, so every call gets a resolved value.
+    api.apiGet.mockResolvedValue({ count: 0, page: 2, pages: 3, page_size: 5, results: [] })
+
+    renderHistoryPage('/history?search=traffic&severity=high&page=2&page_size=5')
+
+    await waitFor(() => expect(api.apiGet).toHaveBeenCalled())
+    const [calledPath] = api.apiGet.mock.calls[api.apiGet.mock.calls.length - 1]
+    expect(calledPath).toContain('search=traffic')
+    expect(calledPath).toContain('severity=high')
+    expect(calledPath).toContain('page=2')
+    expect(calledPath).toContain('page_size=5')
+
+    // The search box must reflect the hydrated value too — proof this came
+    // from the URL, not just the (empty) default filter state.
+    expect(screen.getByLabelText('Search')).toHaveValue('traffic')
   })
 
   it('refetches when a filter (debounced search) changes', async () => {
@@ -88,5 +131,29 @@ describe('HistoryPage', () => {
 
     await waitFor(() => expect(api.apiGet).toHaveBeenCalledTimes(2), { timeout: 2000 })
     expect(api.apiGet.mock.calls[1][0]).toContain('search=traffic')
+  })
+
+  it('clamps to the last known-good page when the current page goes out of range (D13)', async () => {
+    api.apiGet.mockResolvedValueOnce({ count: 1, page: 1, pages: 2, page_size: 10, results: [paginatedRow] })
+
+    const { store } = renderHistoryPage()
+    await screen.findByText('clip.mp4')
+
+    // The only row on page 2 was just deleted elsewhere — the server now
+    // 404s that page (DRF's `NotFound` for an out-of-range page).
+    api.apiGet.mockRejectedValueOnce(
+      new api.ApiError({ status: 404, code: 'not_found', detail: 'Invalid page.' })
+    )
+    api.apiGet.mockResolvedValueOnce({ count: 1, page: 1, pages: 1, page_size: 10, results: [paginatedRow] })
+
+    store.dispatch(setPage(2))
+
+    // Clamped back to the last known-good page automatically...
+    await waitFor(() => expect(store.getState().history.page).toBe(1))
+    // ...the row set recovers...
+    expect(await screen.findByText('clip.mp4')).toBeInTheDocument()
+    // ...and the red ErrorState never flashes for what is a clamp, not a
+    // real failure.
+    expect(screen.queryByText(/failed to load history/i)).not.toBeInTheDocument()
   })
 })
