@@ -3,14 +3,23 @@ name: Frontend CI
 # frontend/ is its own git repository, so this workflow's checkout root IS
 # the repo root (package.json, vite.config.js, Dockerfile all live at ".").
 on:
+  # No branch filter: this project develops on feature branches
+  # (feat/auth-form-validation, etc.), not just main/dev/staging, and a
+  # push-triggered workflow that only listens on those three branches simply
+  # never runs during normal development. Every push, on every branch, runs
+  # CI; the branch list below still gives main/dev/staging their PR gate.
   push:
-    branches: [main, dev, staging]
   pull_request:
     branches: [main, dev, staging]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +42,13 @@ jobs:
         run: npm run build
 
       - name: Upload dist/ artifact
+        # Ubuntu leg only: the dist/ output is identical across OSes (Vite
+        # builds are not platform-specific), so uploading it twice would
+        # just be redundant. It also sidesteps the artifact-name collision
+        # that would otherwise happen when two matrix legs both try to
+        # upload a "frontend-dist" artifact — upload-artifact@v4 requires
+        # unique names per run.
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
