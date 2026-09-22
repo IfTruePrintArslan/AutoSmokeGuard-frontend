@@ -1,0 +1,29 @@
+# Build-context excludes for frontend/Dockerfile.
+#
+# node_modules/ is the big one — without this, every `docker build` ships the
+# entire local dependency tree to the daemon just to have `npm ci` inside the
+# image throw it away and reinstall from package-lock.json anyway.
+
+node_modules/
+dist/
+dist-ssr/
+.vite/
+
+# --- git / CI ------------------------------------------------------------
+.git/
+.github/
+
+# --- env / secrets -----------------------------------------------------
+# VITE_API_BASE_URL reaches the build as a Docker build ARG (see Dockerfile),
+# not via a .env file baked into the image.
+.env
+.env.local
+.env.*.local
+
+# --- logs / editor / coverage --------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+.DS_Store
+.vscode/
+coverage/

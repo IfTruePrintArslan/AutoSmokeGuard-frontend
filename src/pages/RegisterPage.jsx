@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { register } from '../features/auth/authSlice'
 import AuthHero from '../components/auth/AuthHero'
 import { validateName, validateEmail, validatePassword, validateConfirm } from '../lib/validation'
+import { splitServerErrors } from '../lib/formErrors'
 
 const inputCls = (hasError) =>
   `h-[42px] w-full border rounded-[9px] bg-surface flex items-center px-[14px] text-[13.5px] text-text font-[inherit] outline-none transition-[border-color] duration-150 placeholder:text-muted ${hasError ? 'border-[#f87171] mb-1.5 focus:border-[#f87171]' : 'border-line-2 mb-[18px] focus:border-line-2 focus:shadow-[0_0_0_2px_rgba(250,250,250,0.06)]'}`
@@ -38,11 +39,18 @@ export default function RegisterPage() {
     }
     setErrors({})
     setInlineError('')
-    const result = await dispatch(register({ name: name.trim(), email: email.trim(), password }))
+    const result = await dispatch(register({ full_name: name.trim(), email: email.trim(), password }))
     if (register.fulfilled.match(result)) {
       navigate('/dashboard')
     } else {
-      setInlineError(result.payload || 'Registration failed.')
+      const { fieldErrors, inlineError: msg } = splitServerErrors(result.payload, ['full_name', 'email', 'password'])
+      // The backend's `full_name` field maps to this form's `name` input.
+      if (fieldErrors.full_name) {
+        fieldErrors.name = fieldErrors.full_name
+        delete fieldErrors.full_name
+      }
+      setErrors((prev) => ({ ...prev, ...fieldErrors }))
+      setInlineError(msg)
     }
   }
 

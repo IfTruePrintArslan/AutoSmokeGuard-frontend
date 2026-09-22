@@ -1,5 +1,6 @@
 import { useSelector, useDispatch } from 'react-redux'
-import { removeFile } from '../features/upload/uploadSlice'
+import { removeFile, uploadFile, cancelUpload, getClientFile } from '../features/upload/uploadSlice'
+import Spinner from './ui/Spinner'
 
 /* ─────────────────────────────────────────────
    Size formatting — KB / MB (omit when 0)
@@ -42,8 +43,9 @@ function IconClose() {
 /* ─────────────────────────────────────────────
    FileRow — renders one queue item
 ───────────────────────────────────────────── */
-function FileRow({ item, onRemove }) {
+function FileRow({ item, onRemove, onCancel, onRetry }) {
   const { status, previewUrl } = item
+  const canRetry = status === 'rejected' && !!getClientFile(item.id)
 
   return (
     <div className="flex gap-3.5 items-start">
@@ -51,17 +53,18 @@ function FileRow({ item, onRemove }) {
       <div
         className={
           'w-[34px] h-[34px] rounded-[9px] flex-shrink-0 flex items-center justify-center mt-0.5 relative overflow-hidden' +
-          (status === 'done' ? ' bg-low-bg text-low' : '') +
+          (status === 'uploaded' ? ' bg-low-bg text-low' : '') +
           (status === 'uploading' ? ' bg-accent-glow' : '') +
+          (status === 'queued' ? ' bg-[rgba(148,163,184,0.1)] text-muted' : '') +
           (status === 'rejected' ? ' bg-[rgba(148,163,184,0.1)] text-muted' : '')
         }
       >
         {previewUrl ? (
           <img src={previewUrl} alt="" className="w-full h-full object-cover" />
-        ) : status === 'done' ? (
+        ) : status === 'uploaded' ? (
           <IconCheck />
         ) : status === 'uploading' ? (
-          <span className="block w-[14px] h-[14px] rounded-[99px] border-[2.5px] border-white/25 border-t-accent animate-spin [animation-duration:0.7s]" />
+          <Spinner size={14} className="border-white/25 border-t-accent" />
         ) : (
           <IconFile />
         )}
@@ -75,21 +78,44 @@ function FileRow({ item, onRemove }) {
         </div>
 
         {status === 'rejected' ? (
-          <div className="text-[11.5px] text-high mt-1">Rejected — {item.error}</div>
-        ) : status === 'done' ? (
+          <div className="flex items-center justify-between gap-2 mt-1">
+            <div className="text-[11.5px] text-high truncate" title={item.error || ''}>
+              Rejected — {item.error}
+            </div>
+            {canRetry && (
+              <button type="button" className="link shrink-0" onClick={() => onRetry(item)}>
+                Retry
+              </button>
+            )}
+          </div>
+        ) : status === 'uploaded' ? (
           <div className="flex items-center justify-between mt-1.5">
             <div className="text-[11.5px] text-muted">{item.sub}</div>
-            <span className="text-[10.5px] font-semibold py-0.5 px-[7px] rounded-[99px] text-low bg-low-bg shrink-0">Done</span>
+            <span className="text-[10.5px] font-semibold py-0.5 px-[7px] rounded-[99px] text-low bg-low-bg shrink-0">Uploaded</span>
           </div>
+        ) : status === 'queued' ? (
+          <div className="text-[11.5px] text-muted mt-1.5">{item.sub || 'Waiting to upload…'}</div>
         ) : (
           <>
-            <div className="h-1.5 rounded-[99px] bg-[rgba(148,163,184,0.12)] mt-2 mb-1.5 overflow-hidden">
+            <div
+              className="h-1.5 rounded-[99px] bg-[rgba(148,163,184,0.12)] mt-2 mb-1.5 overflow-hidden"
+              role="progressbar"
+              aria-valuenow={item.progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Upload progress for ${item.name}`}
+            >
               <i
                 className="block h-full rounded-[99px] bg-[#e5e5e5] transition-[width] duration-[120ms] ease-linear"
                 style={{ width: `${item.progress}%` }}
               />
             </div>
-            <div className="text-[11.5px] text-muted">{item.sub}</div>
+            <div className="flex items-center justify-between">
+              <div className="text-[11.5px] text-muted">{item.sub}</div>
+              <button type="button" className="link shrink-0" onClick={() => onCancel(item)}>
+                Cancel
+              </button>
+            </div>
           </>
         )}
       </div>
@@ -125,6 +151,13 @@ export default function UploadQueue({ className = '' }) {
     dispatch(removeFile(item.id))
   }
 
+  const handleCancel = (item) => cancelUpload(item.id)
+
+  const handleRetry = (item) => {
+    const file = getClientFile(item.id)
+    if (file) dispatch(uploadFile({ file, clientId: item.id }))
+  }
+
   return (
     <div className={`card flex flex-col min-h-0 ${className}`}>
       <div className="card-head shrink-0">
@@ -141,7 +174,7 @@ export default function UploadQueue({ className = '' }) {
           </div>
         ) : (
           items.map((item) => (
-            <FileRow key={item.id} item={item} onRemove={handleRemove} />
+            <FileRow key={item.id} item={item} onRemove={handleRemove} onCancel={handleCancel} onRetry={handleRetry} />
           ))
         )}
       </div>
