@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
 import {
   Select,
   SelectTrigger,
@@ -9,45 +10,38 @@ import {
 } from '../components/ui/select'
 import { Slider } from '../components/ui/slider'
 import { Switch } from '../components/ui/switch'
+import Spinner from '../components/ui/Spinner'
 import UploadQueue from '../components/UploadQueue'
-import { setSetting } from '../features/analysis/analysisSlice'
-import {
-  addFiles as addFilesAction,
-  updateProgress,
-  setStatus,
-} from '../features/upload/uploadSlice'
+import { setSetting, startAnalysis } from '../features/analysis/analysisSlice'
+import { addFiles as addFilesAction, uploadFile } from '../features/upload/uploadSlice'
+import { fetchSettings } from '../features/settings/settingsSlice'
+import { pushToast } from '../features/ui/uiSlice'
 
 /* ─────────────────────────────────────────────
-   Constants & validation
+   Constants & validation — the hardcoded lists below are ONLY the fallback
+   used while /api/settings hasn't loaded yet; once it has, the live
+   allowed_image_formats / allowed_video_formats / max_upload_mb drive
+   validation and the dropzone hint text.
 ───────────────────────────────────────────── */
 
-const ALLOWED_MIME = new Set([
-  'video/mp4',
-  'video/x-msvideo',
-  'video/avi',
-  'video/quicktime',  // MOV
-  'image/jpeg',
-  'image/png',
-])
-
-const ALLOWED_EXT = new Set(['.mp4', '.avi', '.mov', '.jpg', '.jpeg', '.png'])
-
-const MAX_BYTES = 2 * 1024 * 1024 * 1024 // 2 GB
-
-const TICK_MS = 80
-const UPLOAD_DURATION_MS = 2000 // ~2 s simulated upload
+const FALLBACK_IMAGE_FORMATS = ['jpg', 'jpeg', 'png']
+const FALLBACK_VIDEO_FORMATS = ['mp4', 'avi', 'mov']
+const FALLBACK_MAX_MB = 2048 // 2 GB — matches the previous hardcoded limit
 
 function fileExt(name) {
   const dot = name.lastIndexOf('.')
-  return dot >= 0 ? name.slice(dot).toLowerCase() : ''
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : ''
 }
 
-function validateFile(file) {
+function fmtLimit(mb) {
+  if (mb >= 1024) return `${(mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1)} GB`
+  return `${mb} MB`
+}
+
+function validateFile(file, { formats, maxBytes, maxMb }) {
   const ext = fileExt(file.name)
-  const mimeOk = ALLOWED_MIME.has(file.type)
-  const extOk  = ALLOWED_EXT.has(ext)
-  if (!mimeOk && !extOk) return 'Unsupported file type'
-  if (file.size > MAX_BYTES) return `Exceeds 2 GB (${(file.size / 1e9).toFixed(1)} GB)`
+  if (!formats.includes(ext)) return 'Unsupported file type'
+  if (file.size > maxBytes) return `Exceeds ${fmtLimit(maxMb)} limit`
   return null
 }
 
@@ -71,11 +65,13 @@ function IconUpload() {
 
 export default function UploadPage() {
   const [dragOver, setDragOver] = useState(false)
+  const [starting, setStarting] = useState(false)
 
-  // analysis settings — global Redux state
   const dispatch = useDispatch()
+  const navigate = useNavigate()
   const settings = useSelector((s) => s.analysis.settings)
   const queueItems = useSelector((s) => s.upload.items)
+  const liveSettings = useSelector((s) => s.settings.data)
   const {
     model,
     frameSampling,
@@ -85,50 +81,33 @@ export default function UploadPage() {
     nightMode,
   } = settings
 
-  const inputRef  = useRef(null)
-  const timersRef = useRef({})
+  const inputRef = useRef(null)
 
-  /* ── Cleanup on unmount — clear any running upload timers ── */
+  // Pull the live upload limits once on mount; UploadPage always wants a
+  // fresh read since limits are admin-configurable.
   useEffect(() => {
-    return () => {
-      Object.values(timersRef.current).forEach(clearInterval)
-      timersRef.current = {}
+    dispatch(fetchSettings())
+  }, [dispatch])
+
+  const limits = useMemo(() => {
+    const imageFormats = liveSettings?.allowed_image_formats || FALLBACK_IMAGE_FORMATS
+    const videoFormats = liveSettings?.allowed_video_formats || FALLBACK_VIDEO_FORMATS
+    const maxMb = liveSettings?.max_upload_mb || FALLBACK_MAX_MB
+    return {
+      formats: [...imageFormats, ...videoFormats].map((f) => f.toLowerCase()),
+      imageFormats,
+      videoFormats,
+      maxMb,
+      maxBytes: maxMb * 1024 * 1024,
     }
-  }, [])
+  }, [liveSettings])
 
-  /* ── Simulated upload progress → Redux ── */
-  const startUpload = useCallback(
-    (id) => {
-      const totalTicks = Math.ceil(UPLOAD_DURATION_MS / TICK_MS)
-      let tick = 0
-
-      const iid = setInterval(() => {
-        tick++
-        const raw = tick / totalTicks
-        const pct = Math.min(Math.round(100 * (1 - Math.pow(1 - raw, 2))), 100)
-
-        if (pct >= 100) {
-          dispatch(updateProgress({ id, progress: 100, sub: 'Uploading… 100%' }))
-          dispatch(setStatus({ id, status: 'done', sub: 'Uploaded · ready for analysis' }))
-          clearInterval(iid)
-          delete timersRef.current[id]
-          return
-        }
-
-        dispatch(updateProgress({ id, progress: pct, sub: `Uploading… ${pct}%` }))
-
-        if (tick >= totalTicks) {
-          clearInterval(iid)
-          delete timersRef.current[id]
-        }
-      }, TICK_MS)
-
-      timersRef.current[id] = iid
-    },
-    [dispatch]
+  const acceptAttr = useMemo(
+    () => limits.formats.map((f) => `.${f}`).join(','),
+    [limits.formats]
   )
 
-  /* ── Add files → build serializable items, push to Redux ── */
+  /* ── Add files → build serializable items, push to Redux, start real upload ── */
   const addFiles = useCallback(
     (fileList) => {
       const incoming = Array.from(fileList)
@@ -138,11 +117,11 @@ export default function UploadPage() {
         .filter((f) => !existingKeys.has(`${f.name}|${f.size}`))
         .forEach((f) => {
           const id = crypto.randomUUID()
-          const error = validateFile(f)
+          const error = validateFile(f, limits)
           const isImage = f.type === 'image/jpeg' || f.type === 'image/png'
 
           if (error) {
-            // Rejected — no preview, no timer
+            // Rejected client-side — no preview, no upload attempt.
             dispatch(
               addFilesAction([
                 {
@@ -155,13 +134,14 @@ export default function UploadPage() {
                   status: 'rejected',
                   sub: '',
                   error,
+                  media_id: null,
                 },
               ])
             )
             return
           }
 
-          // Valid — derive serializable fields only (never store the File)
+          // Valid — derive serializable fields only (never store the File in Redux).
           const item = {
             id,
             name: f.name,
@@ -169,15 +149,16 @@ export default function UploadPage() {
             type: f.type,
             previewUrl: isImage ? URL.createObjectURL(f) : null,
             progress: 0,
-            status: 'uploading',
-            sub: 'Uploading… 0%',
+            status: 'queued',
+            sub: 'Waiting to upload…',
             error: null,
+            media_id: null,
           }
           dispatch(addFilesAction([item]))
-          startUpload(id)
+          dispatch(uploadFile({ file: f, clientId: id }))
         })
     },
-    [dispatch, queueItems, startUpload]
+    [dispatch, queueItems, limits]
   )
 
   /* ── Drag handlers ── */
@@ -194,8 +175,37 @@ export default function UploadPage() {
 
   const openPicker = () => inputRef.current?.click()
 
-  // ready files = fully-uploaded rows
-  const readyCount = queueItems.filter((i) => i.status === 'done').length
+  // ready files = fully-uploaded rows with a server media_id
+  const uploadedItems = queueItems.filter((i) => i.status === 'uploaded' && i.media_id)
+  const readyCount = uploadedItems.length
+
+  const handleStartAnalysis = async () => {
+    if (readyCount === 0 || starting) return
+    setStarting(true)
+    try {
+      const results = await Promise.all(
+        uploadedItems.map((item) => dispatch(startAnalysis({ media_id: item.media_id, settings })))
+      )
+      const succeeded = results.filter((r) => startAnalysis.fulfilled.match(r))
+      const failedCount = results.length - succeeded.length
+      if (failedCount > 0) {
+        dispatch(
+          pushToast({
+            message: `${failedCount} of ${results.length} analyses failed to start.`,
+            variant: 'error',
+          })
+        )
+      }
+      if (succeeded.length === 1) {
+        navigate(`/analysis/${succeeded[0].payload.analysis_id}`)
+      } else if (succeeded.length > 1) {
+        dispatch(pushToast({ message: `Started ${succeeded.length} analyses.`, variant: 'success' }))
+        navigate('/analysis')
+      }
+    } finally {
+      setStarting(false)
+    }
+  }
 
   return (
     <div className="flex flex-col xl:h-full">
@@ -213,7 +223,7 @@ export default function UploadPage() {
         ref={inputRef}
         type="file"
         multiple
-        accept="video/mp4,video/x-msvideo,video/avi,video/quicktime,image/jpeg,image/png,.mp4,.avi,.mov,.jpg,.jpeg,.png"
+        accept={acceptAttr}
         style={{ display: 'none' }}
         onChange={(e) => {
           if (e.target.files?.length) addFiles(e.target.files)
@@ -258,12 +268,12 @@ export default function UploadPage() {
                 from your computer
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
-                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">MP4</span>
-                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">AVI</span>
-                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">MOV</span>
-                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">JPEG</span>
-                <span className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">PNG</span>
-                <em className="not-italic text-[11.5px] text-muted ml-1">· up to 2 GB</em>
+                {limits.formats.map((f) => (
+                  <span key={f} className="text-[10.5px] font-semibold tracking-[0.04em] border border-line-2 rounded-[6px] py-1 px-[9px] text-text-2">
+                    {f.toUpperCase()}
+                  </span>
+                ))}
+                <em className="not-italic text-[11.5px] text-muted ml-1">· up to {fmtLimit(limits.maxMb)}</em>
               </div>
             </div>
           </div>
@@ -299,6 +309,7 @@ export default function UploadPage() {
                 min={0}
                 max={100}
                 step={1}
+                aria-label="Smoke sensitivity"
               />
               <div className="flex justify-between text-[10.5px] text-muted mt-[9px]">
                 <span>Low</span>
@@ -313,10 +324,9 @@ export default function UploadPage() {
                 <SelectValue placeholder="Select sampling" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="every">Every frame</SelectItem>
+                <SelectItem value="every1">Every frame</SelectItem>
                 <SelectItem value="every5">Every 5th frame</SelectItem>
                 <SelectItem value="every10">Every 10th frame</SelectItem>
-                <SelectItem value="every30">Every 30th frame</SelectItem>
               </SelectContent>
             </Select>
 
@@ -347,14 +357,11 @@ export default function UploadPage() {
             <button
               className="btn btn-pri w-full h-[42px] justify-center mt-[22px] disabled:opacity-50 disabled:cursor-not-allowed"
               type="button"
-              disabled={readyCount === 0}
-              onClick={() =>
-                alert(
-                  `Starting analysis on ${readyCount} file${readyCount !== 1 ? 's' : ''}.`
-                )
-              }
+              disabled={readyCount === 0 || starting}
+              onClick={handleStartAnalysis}
             >
-              Start analysis
+              {starting && <Spinner size={14} />}
+              {starting ? 'Starting…' : 'Start analysis'}
             </button>
 
             <p className="text-[11.5px] text-muted text-center mt-3">

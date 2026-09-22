@@ -1,7 +1,7 @@
 import * as SliderPrimitive from '@radix-ui/react-slider'
 import { cn } from '../../lib/utils'
 
-function Slider({ className, ...props }) {
+function Slider({ className, 'aria-label': ariaLabel = 'Slider', ...props }) {
   return (
     <SliderPrimitive.Root
       className={cn(
@@ -19,7 +19,7 @@ function Slider({ className, ...props }) {
           'transition-shadow focus-visible:shadow-[0_0_0_5px_rgba(255,255,255,0.35)]',
           'disabled:pointer-events-none disabled:opacity-50'
         )}
-        aria-label="Smoke sensitivity"
+        aria-label={ariaLabel}
       />
     </SliderPrimitive.Root>
   )

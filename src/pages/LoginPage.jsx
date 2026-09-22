@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { login } from '../features/auth/authSlice'
 import AuthHero from '../components/auth/AuthHero'
 import { validateEmail, validatePassword } from '../lib/validation'
+import { splitServerErrors } from '../lib/formErrors'
 
 const inputCls = (hasError) =>
   `h-[42px] w-full border rounded-[9px] bg-surface flex items-center px-[14px] text-[13.5px] text-text font-[inherit] outline-none transition-[border-color] duration-150 placeholder:text-muted ${hasError ? 'border-[#f87171] mb-1.5 focus:border-[#f87171]' : 'border-line-2 mb-[18px] focus:border-line-2 focus:shadow-[0_0_0_2px_rgba(250,250,250,0.06)]'}`
@@ -11,6 +12,7 @@ const inputCls = (hasError) =>
 export default function LoginPage() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
+  const location = useLocation()
   const status = useSelector((state) => state.auth.status)
 
   const [email, setEmail] = useState('')
@@ -19,6 +21,7 @@ export default function LoginPage() {
   const [errors, setErrors] = useState({})
 
   const isPending = status === 'pending'
+  const flash = location.state?.flash
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -34,9 +37,12 @@ export default function LoginPage() {
     setInlineError('')
     const result = await dispatch(login({ email: email.trim(), password }))
     if (login.fulfilled.match(result)) {
-      navigate('/dashboard')
+      const from = location.state?.from?.pathname || '/dashboard'
+      navigate(from, { replace: true })
     } else {
-      setInlineError(result.payload || 'Sign in failed.')
+      const { fieldErrors, inlineError: msg } = splitServerErrors(result.payload, ['email', 'password'])
+      setErrors((prev) => ({ ...prev, ...fieldErrors }))
+      setInlineError(msg)
     }
   }
 
@@ -48,6 +54,12 @@ export default function LoginPage() {
         <div className="w-full max-w-[380px]">
           <h1 className="text-[24px] font-[660] tracking-[-0.02em]">Welcome back</h1>
           <p className="text-text-2 text-[13.5px] mt-[7px] mb-7">Sign in to analyze vehicle emissions.</p>
+
+          {flash && (
+            <p className="text-[12.5px] text-low bg-low-bg border border-low/20 rounded-[9px] px-3 py-2.5 mb-5">
+              {flash}
+            </p>
+          )}
 
           <form onSubmit={handleSubmit} noValidate>
             <label htmlFor="login-email" className="block text-[12.5px] font-[560] mb-[7px] text-[#d4d4d4]">Email</label>

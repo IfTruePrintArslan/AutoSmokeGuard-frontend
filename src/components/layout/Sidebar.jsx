@@ -144,12 +144,16 @@ function SideNavLink({ to, icon, children, badge, onNavigate, collapsed }) {
 }
 
 /* ---------- Sidebar ---------- */
+const TERMINAL_STATUSES = new Set(['done', 'failed'])
+
 export default function Sidebar() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const user = useSelector((state) => state.auth.user)
   const mobileNavOpen = useSelector((state) => state.ui.mobileNavOpen)
   const collapsed = useSelector((state) => state.ui.sidebarCollapsed)
+  const polling = useSelector((state) => state.analysis.polling)
+  const activeCount = Object.values(polling).filter((j) => !TERMINAL_STATUSES.has(j.status)).length
 
   const closeNav = () => dispatch(closeMobileNav())
 
@@ -164,8 +168,8 @@ export default function Sidebar() {
   }, [mobileNavOpen, dispatch])
 
   // Derive display values — fall back to static placeholder if no user
-  const displayName = user?.name || 'Memoon Ahmed'
-  const displaySub = user?.email || 'Transport Authority'
+  const displayName = user?.full_name || 'Account'
+  const displaySub = user?.email || ''
   // Avatar initials: up to 2 chars from name
   const initials = displayName
     .split(' ')
@@ -174,9 +178,11 @@ export default function Sidebar() {
     .slice(0, 2)
     .toUpperCase()
 
-  function handleLogout() {
+  async function handleLogout() {
     dispatch(closeMobileNav())
-    dispatch(logout())
+    // logout() is an async thunk now — it always resolves (it swallows its
+    // own network errors) after clearing local auth state.
+    await dispatch(logout())
     navigate('/login')
   }
 
@@ -272,7 +278,7 @@ export default function Sidebar() {
         <SideNavLink to="/upload" icon={<IconUpload />} onNavigate={closeNav} collapsed={collapsed}>
           Upload
         </SideNavLink>
-        <SideNavLink to="/analysis" icon={<IconAnalysis />} badge="2 running" onNavigate={closeNav} collapsed={collapsed}>
+        <SideNavLink to="/analysis" icon={<IconAnalysis />} badge={activeCount > 0 ? `${activeCount} running` : undefined} onNavigate={closeNav} collapsed={collapsed}>
           Live Analysis
         </SideNavLink>
         <SideNavLink to="/reports" icon={<IconReports />} onNavigate={closeNav} collapsed={collapsed}>

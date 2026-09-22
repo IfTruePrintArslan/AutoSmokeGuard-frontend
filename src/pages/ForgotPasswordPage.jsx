@@ -1,18 +1,26 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useDispatch, useSelector } from 'react-redux'
 import { validateEmail } from '../lib/validation'
+import { splitServerErrors } from '../lib/formErrors'
+import { requestPasswordReset } from '../features/auth/authSlice'
 import AuthHero from '../components/auth/AuthHero'
 
 const inputCls = (hasError) =>
   `h-[42px] w-full border rounded-[9px] bg-surface flex items-center px-[14px] text-[13.5px] text-text font-[inherit] outline-none transition-[border-color] duration-150 placeholder:text-muted ${hasError ? 'border-[#f87171] mb-1.5 focus:border-[#f87171]' : 'border-line-2 mb-[18px] focus:border-line-2 focus:shadow-[0_0_0_2px_rgba(250,250,250,0.06)]'}`
 
 export default function ForgotPasswordPage() {
+  const dispatch = useDispatch()
+  const status = useSelector((state) => state.auth.status)
+
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
-  const [pending, setPending] = useState(false)
+  const [debugToken, setDebugToken] = useState(null)
 
-  function handleSubmit(e) {
+  const pending = status === 'pending'
+
+  async function handleSubmit(e) {
     e.preventDefault()
     const err = validateEmail(email)
     if (err) {
@@ -20,11 +28,14 @@ export default function ForgotPasswordPage() {
       return
     }
     setError('')
-    setPending(true)
-    setTimeout(() => {
-      setPending(false)
+    const result = await dispatch(requestPasswordReset({ email: email.trim() }))
+    if (requestPasswordReset.fulfilled.match(result)) {
+      setDebugToken(result.payload?.debug_token || null)
       setSent(true)
-    }, 700)
+    } else {
+      const { fieldErrors, inlineError } = splitServerErrors(result.payload, ['email'])
+      setError(fieldErrors.email || inlineError)
+    }
   }
 
   return (
@@ -80,12 +91,26 @@ export default function ForgotPasswordPage() {
                 <span className="font-[550] text-text">{email}</span>.
               </p>
 
+              {debugToken && (
+                <div className="card p-[14px] mb-6 text-[12.5px]">
+                  <p className="text-text-2 mb-2">
+                    Dev mode — no mail server is configured. Use this link to continue:
+                  </p>
+                  <Link
+                    to={`/reset-password?token=${encodeURIComponent(debugToken)}`}
+                    className="link break-all"
+                  >
+                    /reset-password?token={debugToken}
+                  </Link>
+                </div>
+              )}
+
               <p className="text-[13.5px] text-text-2">
                 Didn't get it? Check spam or{' '}
                 <button
                   type="button"
                   className="link"
-                  onClick={() => setSent(false)}
+                  onClick={() => { setSent(false); setDebugToken(null) }}
                 >
                   try again
                 </button>

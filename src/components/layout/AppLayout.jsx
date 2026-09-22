@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { closeMobileNav } from '../../features/ui/uiSlice'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
+import Toaster from '../ui/Toast'
 
 export default function AppLayout() {
   const dispatch = useDispatch()
@@ -40,6 +41,8 @@ export default function AppLayout() {
           <Outlet />
         </div>
       </div>
+
+      <Toaster />
     </div>
   )
 }

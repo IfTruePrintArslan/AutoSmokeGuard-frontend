@@ -6,8 +6,10 @@ dist-ssr/
 .vite/
 # env
 .env
-.env.*
+.env.local
+.env.*.local
 !.env.example
+!.env.development
 # logs
 *.log
 npm-debug.log*
