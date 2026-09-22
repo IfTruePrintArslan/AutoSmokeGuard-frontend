@@ -64,7 +64,7 @@ export default function ResetPasswordPage() {
           </p>
 
           {!token && (
-            <p className="text-[12px] text-[#f87171] mb-4">
+            <p role="alert" className="text-[12px] text-[#f87171] mb-4">
               This link is missing a reset token. Request a new one from the{' '}
               <Link to="/forgot-password" className="link">forgot password</Link> page.
             </p>
@@ -84,8 +84,9 @@ export default function ResetPasswordPage() {
               onBlur={() => setErrors((prev) => ({ ...prev, password: validatePassword(password, true) }))}
               autoComplete="new-password"
               aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? 'reset-password-error' : undefined}
             />
-            {errors.password && <p className="text-[12px] text-[#f87171] mt-1.5 mb-3">{errors.password}</p>}
+            {errors.password && <p id="reset-password-error" role="alert" className="text-[12px] text-[#f87171] mt-1.5 mb-3">{errors.password}</p>}
 
             <label htmlFor="reset-confirm" className="block text-[12.5px] font-[560] mb-[7px] text-[#d4d4d4]">
               Confirm new password
@@ -100,10 +101,11 @@ export default function ResetPasswordPage() {
               onBlur={() => setErrors((prev) => ({ ...prev, confirm: validateConfirm(password, confirm) }))}
               autoComplete="new-password"
               aria-invalid={!!errors.confirm}
+              aria-describedby={errors.confirm ? 'reset-confirm-error' : undefined}
             />
-            {errors.confirm && <p className="text-[12px] text-[#f87171] mt-1.5 mb-3">{errors.confirm}</p>}
+            {errors.confirm && <p id="reset-confirm-error" role="alert" className="text-[12px] text-[#f87171] mt-1.5 mb-3">{errors.confirm}</p>}
 
-            {inlineError && <p className="text-[12px] text-[#f87171] mb-3 -mt-2.5">{inlineError}</p>}
+            {inlineError && <p role="alert" className="text-[12px] text-[#f87171] mb-3 -mt-2.5">{inlineError}</p>}
 
             <button
               type="submit"

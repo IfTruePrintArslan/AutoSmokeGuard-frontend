@@ -19,6 +19,16 @@ function fmtDate(iso) {
   }
 }
 
+// `model_metrics.*` comes straight out of the ML backend's `metrics.json` —
+// a file a concurrent retrain job can rewrite at any time, and nothing here
+// validates its shape before it lands in this component. Optional chaining
+// only guards `null`/`undefined`; a metric that came back as a STRING still
+// throws on `.toFixed()`, and with no guard here that throw has nothing but
+// the app-wide ErrorBoundary to catch it. Checked explicitly instead.
+function fmtMetric(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '—'
+}
+
 function slug(label) {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 }
@@ -147,30 +157,59 @@ export default function SettingsPage() {
   const { data, status, error, fieldErrors, saveStatus } = useSelector((s) => s.settings)
 
   const [form, setForm] = useState(null)
+  // Snapshot of the server value `form` was last synced from — dirtiness and
+  // the save patch are both computed against THIS, not the live `data`, so a
+  // field the user never touched is never resent just because someone else
+  // changed it on the server in the meantime (see D14).
+  const [baseline, setBaseline] = useState(null)
+  // The `data` reference this component has already reacted to — lets the
+  // render-phase sync below run at most once per actual change, without an
+  // effect (React's documented pattern for adjusting state from a prop/store
+  // value that just changed: https://react.dev/learn/you-might-not-need-an-effect).
+  const [syncedData, setSyncedData] = useState(null)
   const [severityError, setSeverityError] = useState('')
 
   useEffect(() => {
     dispatch(fetchSettings())
   }, [dispatch])
 
-  // Populate the editable form once the fetched SettingsObj arrives — this
-  // adjusts state during render (React's documented pattern for syncing
-  // local state from a prop/store value that just became available) rather
-  // than in an effect.
-  if (data && !form) {
+  const dirty = useMemo(() => {
+    if (!form || !baseline) return false
+    return FIELDS.some((key) => JSON.stringify(form[key]) !== JSON.stringify(baseline[key]))
+  }, [form, baseline])
+
+  // Re-sync the form whenever a fresh SettingsObj arrives from the server —
+  // but only while there are no unsaved local edits. This covers both the
+  // first load AND every subsequent refetch (e.g. another page's own
+  // `fetchSettings()` populating the shared store before this page mounts),
+  // without ever stomping in-progress typing. While `dirty` is true this
+  // deliberately does NOT mark `data` as synced, so it tries again on every
+  // render until the edits are saved or discarded.
+  if (data && data !== syncedData && !dirty) {
+    setSyncedData(data)
     setForm(data)
+    setBaseline(data)
   }
+
+  // True once the admin has unsaved edits AND the server's copy has moved
+  // on from the snapshot those edits started from — i.e. someone else saved
+  // a change in the meantime. Surfaced as a banner rather than silently
+  // discarding either side.
+  const remoteChangedWhileEditing = useMemo(() => {
+    if (!dirty || !baseline || !data) return false
+    return FIELDS.some((key) => JSON.stringify(baseline[key]) !== JSON.stringify(data[key]))
+  }, [dirty, baseline, data])
+
+  const dirtyFieldCount = useMemo(() => {
+    if (!form || !baseline) return 0
+    return FIELDS.filter((key) => JSON.stringify(form[key]) !== JSON.stringify(baseline[key])).length
+  }, [form, baseline])
 
   useEffect(() => {
     if (saveStatus === 'fulfilled') {
       dispatch(pushToast({ message: 'Settings saved.', variant: 'success' }))
     }
   }, [saveStatus, dispatch])
-
-  const dirty = useMemo(() => {
-    if (!form || !data) return false
-    return FIELDS.some((key) => JSON.stringify(form[key]) !== JSON.stringify(data[key]))
-  }, [form, data])
 
   const setField = (key, value) => {
     setForm((f) => ({ ...f, [key]: value }))
@@ -179,6 +218,7 @@ export default function SettingsPage() {
 
   const handleReset = () => {
     setForm(data)
+    setBaseline(data)
     setSeverityError('')
     dispatch(clearFieldErrors())
   }
@@ -189,9 +229,22 @@ export default function SettingsPage() {
       return
     }
     setSeverityError('')
+    // Only the fields the admin actually changed — the endpoint documents
+    // "unspecified fields are left unchanged", so anything untouched here
+    // must stay unspecified, not resent at its (possibly stale) local value.
     const patch = {}
-    FIELDS.forEach((key) => { patch[key] = form[key] })
-    await dispatch(saveSettings(patch))
+    FIELDS.forEach((key) => {
+      if (JSON.stringify(form[key]) !== JSON.stringify(baseline[key])) patch[key] = form[key]
+    })
+    if (Object.keys(patch).length === 0) return
+    const result = await dispatch(saveSettings(patch))
+    if (saveSettings.fulfilled.match(result)) {
+      // Adopt the server's authoritative merged state as the new baseline —
+      // this also picks up any fields a concurrent save changed that we
+      // deliberately left out of our own patch.
+      setForm(result.payload)
+      setBaseline(result.payload)
+    }
   }
 
   async function handleSignOut() {
@@ -258,6 +311,20 @@ export default function SettingsPage() {
         {!isAdmin && (
           <div className="mx-[18px] mt-4 rounded-[9px] border border-line-2 bg-bg-2 px-3 py-2.5 text-[12px] text-text-2">
             Administrator access required to change system configuration. Showing current values, read-only.
+          </div>
+        )}
+
+        {remoteChangedWhileEditing && (
+          <div
+            role="alert"
+            className="mx-[18px] mt-4 rounded-[9px] border border-mod/30 bg-mod-bg px-3 py-2.5 text-[12px] text-mod"
+          >
+            Someone else changed these settings while you were editing. Saving now will only apply the
+            field{dirtyFieldCount === 1 ? '' : 's'} you changed here — everything else keeps their value.{' '}
+            <button type="button" className="link" style={{ color: 'inherit' }} onClick={handleReset}>
+              Discard my edits and reload the latest values
+            </button>
+            .
           </div>
         )}
 
@@ -388,9 +455,9 @@ export default function SettingsPage() {
             <StatChip label="Worker threads" value={data.runtime.worker_threads} />
             {data.runtime.model_metrics ? (
               <>
-                <StatChip label="Dice" value={data.runtime.model_metrics.dice?.toFixed(2)} />
-                <StatChip label="IoU" value={data.runtime.model_metrics.iou?.toFixed(2)} />
-                <StatChip label="Pixel accuracy" value={data.runtime.model_metrics.pixel_accuracy?.toFixed(2)} />
+                <StatChip label="Dice" value={fmtMetric(data.runtime.model_metrics.dice)} />
+                <StatChip label="IoU" value={fmtMetric(data.runtime.model_metrics.iou)} />
+                <StatChip label="Pixel accuracy" value={fmtMetric(data.runtime.model_metrics.pixel_accuracy)} />
               </>
             ) : (
               <StatChip label="Model metrics" value="Unavailable" />

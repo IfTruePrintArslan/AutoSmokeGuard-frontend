@@ -14,6 +14,7 @@ import ErrorState from '../components/ui/ErrorState'
 import Pagination from '../components/ui/Pagination'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import SeverityBadge from '../components/ui/SeverityBadge'
+import InfoTooltip from '../components/ui/InfoTooltip'
 import {
   fetchHistory,
   setFilter,
@@ -21,10 +22,12 @@ import {
   setPage,
   setPageSize,
   resetFilters,
+  selectHistoryFallbackPage,
 } from '../features/history/historySlice'
 import { deleteAnalysis } from '../features/analysis/analysisSlice'
 import { pushToast } from '../features/ui/uiSlice'
 import { apiDownload, mediaUrl } from '../lib/api'
+import { VEHICLE_DETECTIONS_LABEL, VEHICLE_DETECTIONS_TOOLTIP_TEXT } from '../lib/copy'
 
 const SEVERITY_OPTIONS = [
   { value: 'all', label: 'All severities' },
@@ -50,8 +53,8 @@ const STATUS_OPTIONS = [
 const ORDERING_OPTIONS = [
   { value: '-created_at', label: 'Newest first' },
   { value: 'created_at', label: 'Oldest first' },
-  { value: '-total_vehicles', label: 'Most vehicles' },
-  { value: 'total_vehicles', label: 'Fewest vehicles' },
+  { value: '-total_vehicles', label: 'Most detections' },
+  { value: 'total_vehicles', label: 'Fewest detections' },
   { value: '-avg_confidence', label: 'Highest confidence' },
   { value: 'avg_confidence', label: 'Lowest confidence' },
 ]
@@ -71,7 +74,8 @@ export default function HistoryPage() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { items, count, page, pages, pageSize, filters, status, error } = useSelector((s) => s.history)
+  const { items, count, page, pages, pageSize, filters, status, error, pageOutOfRange } = useSelector((s) => s.history)
+  const fallbackPage = useSelector(selectHistoryFallbackPage)
 
   const [searchInput, setSearchInput] = useState(() => searchParams.get('search') || '')
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -115,6 +119,14 @@ export default function HistoryPage() {
     return () => clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput])
+
+  // The requested page no longer exists (e.g. deleting the last row on it) —
+  // clamp to the last known-good page rather than stranding the view on a
+  // permanently-empty page. `pageOutOfRange` (and so `fallbackPage`) clears
+  // itself on the next `fetchHistory.pending`, so this cannot loop.
+  useEffect(() => {
+    if (fallbackPage) dispatch(setPage(fallbackPage))
+  }, [fallbackPage, dispatch])
 
   const handleSelectFilter = (key) => (value) => {
     dispatch(setFilter({ key, value: value === 'all' ? '' : value }))
@@ -248,7 +260,7 @@ export default function HistoryPage() {
             {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-11 w-full" />)}
           </div>
         </div>
-      ) : status === 'rejected' && !items.length ? (
+      ) : status === 'rejected' && !items.length && !pageOutOfRange ? (
         <ErrorState message={error} onRetry={() => dispatch(fetchHistory({ page, page_size: pageSize, ...filters }))} />
       ) : count === 0 ? (
         hasActiveFilters ? (
@@ -272,7 +284,14 @@ export default function HistoryPage() {
                 <tr>
                   <th>Source</th>
                   <th>Date</th>
-                  <th>Vehicles</th>
+                  <th>
+                    <span className="inline-flex items-center gap-1.5">
+                      {VEHICLE_DETECTIONS_LABEL}
+                      <InfoTooltip label={`What does "${VEHICLE_DETECTIONS_LABEL}" mean?`}>
+                        {VEHICLE_DETECTIONS_TOOLTIP_TEXT}
+                      </InfoTooltip>
+                    </span>
+                  </th>
                   <th>Smoke</th>
                   <th>Confidence</th>
                   <th>Severity</th>

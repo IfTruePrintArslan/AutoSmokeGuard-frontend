@@ -1,0 +1,118 @@
+import { describe, it, expect } from 'vitest'
+import { readFileSync, existsSync } from 'node:fs'
+import { resolve } from 'node:path'
+import process from 'node:process'
+import {
+  REPORT_BUDGET_SECONDS,
+  REPORT_BUDGET_MS,
+  REPORT_POLL_BASE_MS,
+  REPORT_POLL_MAX_MS,
+  nextReportPollDelayMs,
+  reportBudgetRemainingMs,
+} from '../reportBudget'
+
+// The client's willingness to wait for a report is a mirror of a server
+// guarantee, and a mirror that can drift silently is worse than no mirror at
+// all: the failure it produces (a "Generate PDF report" button offered for a
+// PDF the server is still writing) looks like a UI nit and is actually a
+// duplicated render plus a lie to the user. So the mirror is checked.
+// Vitest runs with the frontend project root as cwd; the backend is its
+// sibling (the e2e fixtures already depend on that same layout).
+const SERVICES_PY = resolve(process.cwd(), '../backend/reports/services.py')
+
+describe('report budget — parity with the server', () => {
+  it('tracks backend REPORT_BUDGET_SECONDS exactly', () => {
+    expect(
+      existsSync(SERVICES_PY),
+      `Cannot verify the report-budget mirror: ${SERVICES_PY} was not found. ` +
+        'This test reads the server constant on purpose — if the backend has moved, ' +
+        'point this path at its new home rather than deleting the check.'
+    ).toBe(true)
+
+    const source = readFileSync(SERVICES_PY, 'utf-8')
+    const match = source.match(/^REPORT_BUDGET_SECONDS\s*=\s*(\d+)\s*$/m)
+
+    expect(match, 'REPORT_BUDGET_SECONDS is no longer a plain literal in backend/reports/services.py').toBeTruthy()
+    expect(
+      Number(match[1]),
+      'backend REPORT_BUDGET_SECONDS and frontend REPORT_BUDGET_SECONDS have drifted apart — ' +
+        'the client must not give up on a report before the server has run out of time to produce one'
+    ).toBe(REPORT_BUDGET_SECONDS)
+  })
+
+  it('derives REPORT_BUDGET_MS from the seconds value', () => {
+    expect(REPORT_BUDGET_MS).toBe(REPORT_BUDGET_SECONDS * 1000)
+  })
+})
+
+describe('reportBudgetRemainingMs', () => {
+  const now = Date.parse('2026-01-01T00:05:00Z')
+
+  it('grants the full budget to a run that has only just finished', () => {
+    expect(reportBudgetRemainingMs('2026-01-01T00:05:00Z', now)).toBe(REPORT_BUDGET_MS)
+  })
+
+  it('counts down as the server spends its budget', () => {
+    expect(reportBudgetRemainingMs('2026-01-01T00:04:50Z', now)).toBe(REPORT_BUDGET_MS - 10_000)
+    expect(reportBudgetRemainingMs('2026-01-01T00:04:31Z', now)).toBe(1_000)
+  })
+
+  it('returns 0 once the budget is spent, and never goes negative', () => {
+    expect(reportBudgetRemainingMs('2026-01-01T00:04:30Z', now)).toBe(0)
+    // An analysis that finished hours ago is not "still rendering" — its
+    // report is never coming, so the manual fallback is owed immediately
+    // rather than after another full budget of spinning.
+    expect(reportBudgetRemainingMs('2026-01-01T00:00:00Z', now)).toBe(0)
+    expect(reportBudgetRemainingMs('2020-06-01T12:00:00Z', now)).toBe(0)
+  })
+
+  it('clamps rather than trusts when the client clock runs behind the server', () => {
+    // A finish time "in the future" means skew, not a 2-minute-early report.
+    expect(reportBudgetRemainingMs('2026-01-01T00:07:00Z', now)).toBe(REPORT_BUDGET_MS)
+  })
+
+  it('grants the full budget when the finish time is missing or unusable', () => {
+    for (const value of [null, undefined, '', 'not-a-date', NaN]) {
+      expect(reportBudgetRemainingMs(value, now)).toBe(REPORT_BUDGET_MS)
+    }
+  })
+
+  it('accepts a Date as well as an ISO string', () => {
+    expect(reportBudgetRemainingMs(new Date('2026-01-01T00:04:50Z'), now)).toBe(REPORT_BUDGET_MS - 10_000)
+  })
+})
+
+describe('nextReportPollDelayMs', () => {
+  it('keeps the first attempt short so a fast report still lands promptly', () => {
+    // The common case is a still image whose PDF is written in well under a
+    // second; widening the budget must not cost that case any latency.
+    expect(nextReportPollDelayMs(0)).toBe(REPORT_POLL_BASE_MS)
+  })
+
+  it('backs off geometrically and never exceeds the ceiling', () => {
+    const delays = Array.from({ length: 20 }, (_, i) => nextReportPollDelayMs(i))
+    expect(delays[1]).toBeGreaterThan(delays[0])
+    for (let i = 1; i < delays.length; i++) {
+      expect(delays[i]).toBeGreaterThanOrEqual(delays[i - 1])
+      expect(delays[i]).toBeLessThanOrEqual(REPORT_POLL_MAX_MS)
+    }
+    expect(delays[delays.length - 1]).toBe(REPORT_POLL_MAX_MS)
+  })
+
+  it('covers the whole budget in a handful of requests, not a tight loop', () => {
+    let elapsed = 0
+    let polls = 0
+    while (elapsed < REPORT_BUDGET_MS) {
+      elapsed += nextReportPollDelayMs(polls)
+      polls += 1
+    }
+    // 30s at a flat 500ms would be 60 requests; backoff must do far better.
+    expect(polls).toBeLessThanOrEqual(12)
+  })
+
+  it('treats a nonsensical attempt index as the first attempt', () => {
+    expect(nextReportPollDelayMs(-3)).toBe(REPORT_POLL_BASE_MS)
+    expect(nextReportPollDelayMs(NaN)).toBe(REPORT_POLL_BASE_MS)
+    expect(nextReportPollDelayMs(undefined)).toBe(REPORT_POLL_BASE_MS)
+  })
+})

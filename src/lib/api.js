@@ -159,11 +159,39 @@ export const apiPatch = (path, body, options = {}) => request(path, { ...options
 export const apiPut = (path, body, options = {}) => request(path, { ...options, method: 'PUT', body })
 export const apiDelete = (path, options = {}) => request(path, { ...options, method: 'DELETE' })
 
+function uploadAbortError() {
+  const err = new ApiError({ status: 0, code: 'aborted', detail: 'Upload cancelled.' })
+  err.name = 'AbortError'
+  return err
+}
+
+function networkError() {
+  return new ApiError({ status: 0, code: 'network_error', detail: 'Network error. Please check your connection.' })
+}
+
 // XHR-based upload — fetch cannot report upload progress.
 export function apiUpload(path, file, fields = {}, options = {}) {
   const { onProgress, signal, auth = true } = options
 
   return new Promise((resolve, reject) => {
+    // The returned promise MUST settle exactly once on every path. XHR's
+    // load/error/abort events are not reliably mutually exclusive across the
+    // retry-after-refresh flow below (and one of them, see `onAbort`, can be
+    // guaranteed *not* to fire at all), so both outcomes are funnelled
+    // through these latches instead of calling resolve/reject directly. A
+    // second call is a no-op rather than a silently-dropped settle.
+    let settled = false
+    const settleResolve = (value) => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    const settleReject = (err) => {
+      if (settled) return
+      settled = true
+      reject(err)
+    }
+
     const formData = new FormData()
     formData.append('file', file)
     for (const [key, value] of Object.entries(fields)) {
@@ -172,7 +200,12 @@ export function apiUpload(path, file, fields = {}, options = {}) {
 
     function send(retried) {
       const xhr = new XMLHttpRequest()
-      xhr.open('POST', `${API_BASE}${path}`)
+      try {
+        xhr.open('POST', `${API_BASE}${path}`)
+      } catch {
+        settleReject(networkError())
+        return
+      }
 
       if (auth) {
         const access = getAccess()
@@ -183,6 +216,15 @@ export function apiUpload(path, file, fields = {}, options = {}) {
       function onAbort() {
         aborted = true
         xhr.abort()
+        // `xhr.abort()` only fires `abort` when the send flag is set. In the
+        // OPENED-but-not-yet-sent state (an AbortSignal that was already
+        // aborted when `send()` ran — e.g. the user cancelled while the 401
+        // token refresh below was in flight, so the retry starts on a dead
+        // signal) the spec's abort algorithm fires *nothing at all*, and in
+        // the DONE state it is a no-op. Either way `xhr.onabort` never runs,
+        // so reject here too; when `abort` does fire, the latch above makes
+        // this a harmless duplicate.
+        settleReject(uploadAbortError())
       }
       if (signal) {
         if (signal.aborted) {
@@ -213,38 +255,45 @@ export function apiUpload(path, file, fields = {}, options = {}) {
           if (norm.code === EXPIRED_TOKEN_CODE) {
             try {
               await refreshAccessToken()
-              send(true)
-              return
             } catch {
               clearAuth()
               dispatchUnauthorized()
-              reject(new ApiError({ status: 401, code: norm.code, detail: norm.detail, errors: norm.errors }))
+              settleReject(new ApiError({ status: 401, code: norm.code, detail: norm.detail, errors: norm.errors }))
               return
             }
+            // No abort listener is registered during the refresh above, so an
+            // abort that lands inside that window is only observable here —
+            // `send(true)` re-checks `signal.aborted` and rejects.
+            send(true)
+            return
           }
         }
 
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(data)
+          settleResolve(data)
         } else {
           const norm = normalizeErrorBody(data)
-          reject(new ApiError({ status: xhr.status, code: norm.code, detail: norm.detail, errors: norm.errors }))
+          settleReject(new ApiError({ status: xhr.status, code: norm.code, detail: norm.detail, errors: norm.errors }))
         }
       }
 
       xhr.onerror = () => {
         if (signal) signal.removeEventListener('abort', onAbort)
-        reject(new ApiError({ status: 0, code: 'network_error', detail: 'Network error. Please check your connection.' }))
+        settleReject(networkError())
       }
 
       xhr.onabort = () => {
         if (signal) signal.removeEventListener('abort', onAbort)
-        const err = new ApiError({ status: 0, code: 'aborted', detail: 'Upload cancelled.' })
-        err.name = 'AbortError'
-        reject(err)
+        settleReject(uploadAbortError())
       }
 
-      xhr.send(formData)
+      try {
+        xhr.send(formData)
+      } catch {
+        if (signal) signal.removeEventListener('abort', onAbort)
+        settleReject(networkError())
+        return
+      }
       if (aborted) xhr.abort()
     }
 
@@ -252,20 +301,46 @@ export function apiUpload(path, file, fields = {}, options = {}) {
   })
 }
 
+// How long a download's object URL is kept alive after the synthetic click.
+// Firefox only *queues* the download on click and reads the `blob:` URL on a
+// later task; 40s is the value FileSaver.js settled on after the same bug.
+export const DOWNLOAD_REVOKE_DELAY_MS = 40000
+
 // Authenticated blob download that triggers a browser save dialog.
 export async function apiDownload(path, filename) {
   const res = await request(path, { raw: true })
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)
+
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename || 'download'
+  a.rel = 'noopener'
+  a.style.display = 'none'
+  document.body.appendChild(a)
+
   try {
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename || 'download'
-    document.body.appendChild(a)
     a.click()
-    a.remove()
   } finally {
-    URL.revokeObjectURL(url)
+    // The revoke MUST NOT be synchronous with the click.
+    //
+    // Chrome resolves a same-origin `blob:` URL during the click's own
+    // dispatch, so revoking straight afterwards happens to survive there.
+    // Firefox (and Safari) instead queue the download and only fetch the URL
+    // on a later task — by which point a synchronous revoke has already
+    // destroyed the blob, so the download silently does nothing. There is no
+    // event and no rejection for that failure, so it cannot be caught or
+    // retried; the only fix is to keep the URL alive past the click.
+    //
+    // The anchor is likewise detached a task later rather than inline, and
+    // guarded with `isConnected` so a caller that has already cleared the
+    // body (a route teardown, a test) cannot throw here.
+    setTimeout(() => {
+      if (a.isConnected) a.remove()
+    }, 0)
+    setTimeout(() => {
+      URL.revokeObjectURL(url)
+    }, DOWNLOAD_REVOKE_DELAY_MS)
   }
 }
 

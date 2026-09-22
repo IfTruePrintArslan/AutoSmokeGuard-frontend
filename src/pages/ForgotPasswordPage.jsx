@@ -33,7 +33,11 @@ export default function ForgotPasswordPage() {
       setDebugToken(result.payload?.debug_token || null)
       setSent(true)
     } else {
-      const { fieldErrors, inlineError } = splitServerErrors(result.payload, ['email'])
+      const { fieldErrors, inlineError } = splitServerErrors(
+        result.payload,
+        ['email'],
+        'Too many requests. Please wait about a minute and try again.'
+      )
       setError(fieldErrors.email || inlineError)
     }
   }
@@ -65,8 +69,9 @@ export default function ForgotPasswordPage() {
                   onChange={(e) => { setEmail(e.target.value); setError('') }}
                   onBlur={() => setError(validateEmail(email))}
                   aria-invalid={!!error}
+                  aria-describedby={error ? 'forgot-email-error' : undefined}
                 />
-                {error && <p className="text-[12px] text-[#f87171] mt-1.5 mb-3">{error}</p>}
+                {error && <p id="forgot-email-error" role="alert" className="text-[12px] text-[#f87171] mt-1.5 mb-3">{error}</p>}
 
                 <button
                   type="submit"

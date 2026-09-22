@@ -6,6 +6,7 @@ import { openMobileNav } from '../../features/ui/uiSlice'
 import { apiGet } from '../../lib/api'
 import SeverityBadge from '../ui/SeverityBadge'
 import Spinner from '../ui/Spinner'
+import { useModalFocusTrap } from '../../hooks/useModalFocusTrap'
 
 const PAGE_LABELS = {
   '/dashboard': 'Dashboard',
@@ -27,6 +28,10 @@ function CommandPalette({ onClose }) {
   const [loading, setLoading] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef(null)
+  // Escape + focus-in-on-open/Tab-trap/focus-restore-on-close are handled by
+  // the shared hook; the search-result ArrowUp/ArrowDown/Enter navigation
+  // below stays local to this component.
+  const dialogRef = useModalFocusTrap(true, onClose)
 
   useEffect(() => {
     const id = setTimeout(() => inputRef.current?.focus(), 0)
@@ -58,10 +63,7 @@ function CommandPalette({ onClose }) {
 
   useEffect(() => {
     function onKeyDown(e) {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose()
-      } else if (e.key === 'ArrowDown') {
+      if (e.key === 'ArrowDown') {
         e.preventDefault()
         setActiveIndex((i) => Math.min(i + 1, Math.max(results.length - 1, 0)))
       } else if (e.key === 'ArrowUp') {
@@ -79,7 +81,7 @@ function CommandPalette({ onClose }) {
   return createPortal(
     <div className="fixed inset-0 z-[150] flex items-start justify-center pt-[12vh] p-4">
       <div className="absolute inset-0 bg-black/60" aria-hidden="true" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label="Search analyses" className="relative card w-full max-w-[520px] overflow-hidden">
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Search analyses" className="relative card w-full max-w-[520px] overflow-hidden">
         <div className="flex items-center gap-[9px] px-4 h-12 border-b border-line">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
             <circle cx="11" cy="11" r="7" />
@@ -219,36 +221,6 @@ export default function Topbar() {
           <path d="m21 21-4.3-4.3" />
         </svg>
       </button>
-
-      {/* Bell icon-btn */}
-      <div
-        className="flex items-center justify-center text-[#a3a3a3] relative"
-        style={{
-          width: '36px',
-          height: '36px',
-          border: '1px solid var(--color-line-2)',
-          borderRadius: '9px',
-          background: '#141414',
-          flexShrink: 0,
-        }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-          <path d="M13.7 21a2 2 0 0 1-3.4 0" />
-        </svg>
-        {/* Red notification dot */}
-        <span
-          className="absolute rounded-full"
-          style={{
-            top: '8px',
-            right: '9px',
-            width: '7px',
-            height: '7px',
-            background: '#f87171',
-            border: '2px solid #141414',
-          }}
-        />
-      </div>
 
       {/* New analysis button — label hidden on very small widths (icon-only) */}
       <button

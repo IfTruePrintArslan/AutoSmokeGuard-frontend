@@ -19,14 +19,18 @@ import { pushToast } from '../features/ui/uiSlice'
 
 /* ─────────────────────────────────────────────
    Constants & validation — the hardcoded lists below are ONLY the fallback
-   used while /api/settings hasn't loaded yet; once it has, the live
-   allowed_image_formats / allowed_video_formats / max_upload_mb drive
-   validation and the dropzone hint text.
+   used while /api/settings hasn't loaded yet (or couldn't load at all); once
+   it has, the live allowed_image_formats / allowed_video_formats /
+   max_upload_mb drive validation and the dropzone hint text.
 ───────────────────────────────────────────── */
 
 const FALLBACK_IMAGE_FORMATS = ['jpg', 'jpeg', 'png']
 const FALLBACK_VIDEO_FORMATS = ['mp4', 'avi', 'mov']
-const FALLBACK_MAX_MB = 2048 // 2 GB — matches the previous hardcoded limit
+// A conservative guess (matches the API contract's own documented default),
+// not an optimistic one — advertising a limit the server doesn't actually
+// honour just means the operator waits out an entire doomed upload before
+// finding out. Only ever used when the real limit truly could not be read.
+const FALLBACK_MAX_MB = 512
 
 function fileExt(name) {
   const dot = name.lastIndexOf('.')
@@ -72,14 +76,9 @@ export default function UploadPage() {
   const settings = useSelector((s) => s.analysis.settings)
   const queueItems = useSelector((s) => s.upload.items)
   const liveSettings = useSelector((s) => s.settings.data)
-  const {
-    model,
-    frameSampling,
-    sensitivity,
-    autoPdf,
-    plateRedaction,
-    nightMode,
-  } = settings
+  const liveSettingsStatus = useSelector((s) => s.settings.status)
+  const liveSettingsError = useSelector((s) => s.settings.error)
+  const { frameSampling, sensitivity, autoPdf } = settings
 
   const inputRef = useRef(null)
 
@@ -88,6 +87,11 @@ export default function UploadPage() {
   useEffect(() => {
     dispatch(fetchSettings())
   }, [dispatch])
+
+  // The fetch genuinely failed and nothing was ever cached — the limits
+  // below are the conservative fallback, not a confirmed value, and the UI
+  // says so rather than presenting a guess as fact.
+  const limitsUnknown = !liveSettings && liveSettingsStatus === 'rejected'
 
   const limits = useMemo(() => {
     const imageFormats = liveSettings?.allowed_image_formats || FALLBACK_IMAGE_FORMATS
@@ -111,52 +115,93 @@ export default function UploadPage() {
   const addFiles = useCallback(
     (fileList) => {
       const incoming = Array.from(fileList)
-      const existingKeys = new Set(queueItems.map((i) => `${i.name}|${i.size}`))
+      // Grows as we walk `incoming`, so two files in the SAME selection that
+      // happen to share a name+size (e.g. two cameras' identically-sized
+      // clips, both literally named clip.mp4) are caught too, not just
+      // duplicates of something already in the queue.
+      const seenKeys = new Set(queueItems.map((i) => `${i.name}|${i.size}`))
+      const skippedNames = []
 
-      incoming
-        .filter((f) => !existingKeys.has(`${f.name}|${f.size}`))
-        .forEach((f) => {
-          const id = crypto.randomUUID()
-          const error = validateFile(f, limits)
-          const isImage = f.type === 'image/jpeg' || f.type === 'image/png'
+      incoming.forEach((f) => {
+        const key = `${f.name}|${f.size}`
+        const id = crypto.randomUUID()
 
-          if (error) {
-            // Rejected client-side — no preview, no upload attempt.
-            dispatch(
-              addFilesAction([
-                {
-                  id,
-                  name: f.name,
-                  size: f.size,
-                  type: f.type,
-                  previewUrl: null,
-                  progress: 0,
-                  status: 'rejected',
-                  sub: '',
-                  error,
-                  media_id: null,
-                },
-              ])
-            )
-            return
-          }
+        if (seenKeys.has(key)) {
+          // Surfaced explicitly — silently dropping this meant the second
+          // camera's footage was never analysed, with nothing to notice.
+          skippedNames.push(f.name)
+          dispatch(
+            addFilesAction([
+              {
+                id,
+                name: f.name,
+                size: f.size,
+                type: f.type,
+                previewUrl: null,
+                progress: 0,
+                status: 'rejected',
+                sub: '',
+                error: 'Duplicate — a file with this name and size is already in the queue.',
+                media_id: null,
+              },
+            ])
+          )
+          return
+        }
+        seenKeys.add(key)
 
-          // Valid — derive serializable fields only (never store the File in Redux).
-          const item = {
-            id,
-            name: f.name,
-            size: f.size,
-            type: f.type,
-            previewUrl: isImage ? URL.createObjectURL(f) : null,
-            progress: 0,
-            status: 'queued',
-            sub: 'Waiting to upload…',
-            error: null,
-            media_id: null,
-          }
-          dispatch(addFilesAction([item]))
-          dispatch(uploadFile({ file: f, clientId: id }))
-        })
+        const error = validateFile(f, limits)
+        const isImage = f.type === 'image/jpeg' || f.type === 'image/png'
+
+        if (error) {
+          // Rejected client-side — no preview, no upload attempt.
+          dispatch(
+            addFilesAction([
+              {
+                id,
+                name: f.name,
+                size: f.size,
+                type: f.type,
+                previewUrl: null,
+                progress: 0,
+                status: 'rejected',
+                sub: '',
+                error,
+                media_id: null,
+              },
+            ])
+          )
+          return
+        }
+
+        // Valid — derive serializable fields only (never store the File in Redux).
+        const item = {
+          id,
+          name: f.name,
+          size: f.size,
+          type: f.type,
+          previewUrl: isImage ? URL.createObjectURL(f) : null,
+          progress: 0,
+          status: 'queued',
+          sub: 'Waiting to upload…',
+          error: null,
+          media_id: null,
+        }
+        dispatch(addFilesAction([item]))
+        dispatch(uploadFile({ file: f, clientId: id }))
+      })
+
+      if (skippedNames.length === 1) {
+        dispatch(pushToast({
+          message: `Skipped "${skippedNames[0]}" — a file with the same name and size is already in the queue.`,
+          variant: 'error',
+        }))
+      } else if (skippedNames.length > 1) {
+        dispatch(pushToast({
+          message: `Skipped ${skippedNames.length} files already in the queue (same name and size).`,
+          variant: 'error',
+        }))
+      }
     },
     [dispatch, queueItems, limits]
   )
@@ -234,6 +279,17 @@ export default function UploadPage() {
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_372px] gap-4 xl:flex-1 xl:min-h-0">
         {/* ── LEFT column ── */}
         <div className="flex flex-col min-h-0">
+          {limitsUnknown && (
+            <div role="alert" className="card mb-4 px-4 py-3 text-[12px] text-mod border border-mod/30 bg-mod-bg">
+              Upload limits could not be loaded{liveSettingsError ? ` (${liveSettingsError})` : ''} — showing a
+              conservative {fmtLimit(FALLBACK_MAX_MB)} estimate until this is confirmed. Large files may still be
+              rejected by the server.{' '}
+              <button type="button" className="link" style={{ color: 'inherit' }} onClick={() => dispatch(fetchSettings())}>
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* Dropzone */}
           <div
             className="card p-2.5 cursor-pointer"
@@ -289,17 +345,19 @@ export default function UploadPage() {
             <h3>Analysis settings</h3>
           </div>
           <div className="pt-1.5 pb-[18px] px-[18px]">
-            <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Detection model</label>
-            <Select value={model} onValueChange={(v) => dispatch(setSetting({ key: 'model', value: v }))}>
-              <SelectTrigger aria-label="Detection model">
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="yolov8-2.3">YOLOv8-seg · v2.3</SelectItem>
-                <SelectItem value="yolov11-3.0">YOLOv11-seg · v3.0</SelectItem>
-                <SelectItem value="rtdetr-1.2">RT-DETR · v1.2</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* Only one detection model actually runs server-side — a
+                multi-option select implied a choice that did not exist
+                (every option silently ran the same model). Shown as a
+                plain, accurately-labelled read-out instead of a fake
+                picker. */}
+            <label id="detection-model-label" className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Detection model</label>
+            <div
+              aria-labelledby="detection-model-label"
+              className="h-9 flex items-center rounded-[9px] border border-line-2 bg-bg-2 px-3 text-[13px] text-text-2"
+            >
+              YOLO11n
+            </div>
+            <p className="text-[11px] text-muted mt-1.5">Only one detection model is currently available.</p>
 
             <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Smoke sensitivity</label>
             <div className="pt-1.5 px-0.5">
@@ -316,6 +374,10 @@ export default function UploadPage() {
                 <span>Balanced</span>
                 <span>Strict</span>
               </div>
+              <p className="text-[11px] text-muted mt-1.5">
+                Stricter requires higher-confidence, more visually distinct smoke before flagging a
+                detection — fewer results, fewer false positives.
+              </p>
             </div>
 
             <label className="block text-[12.5px] font-[560] text-[#d4d4d4] mt-4 mb-2">Frame sampling</label>
@@ -330,6 +392,11 @@ export default function UploadPage() {
               </SelectContent>
             </Select>
 
+            {/* License plate redaction / night-mode enhancement toggles were
+                removed — they were never implemented server-side (silently
+                dropped by the settings→API mapping), so they looked live
+                but did nothing. Only the toggle that actually has an effect
+                remains. */}
             <div className="mt-[22px] flex flex-col gap-[15px]">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -337,20 +404,6 @@ export default function UploadPage() {
                   <span className="text-[11px] text-muted">Create report when analysis completes</span>
                 </div>
                 <Switch checked={autoPdf} onCheckedChange={(v) => dispatch(setSetting({ key: 'autoPdf', value: v }))} aria-label="Auto-generate PDF report" />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <b className="text-[12.5px] font-[550] block">License plate redaction</b>
-                  <span className="text-[11px] text-muted">Blur plates in exported frames</span>
-                </div>
-                <Switch checked={plateRedaction} onCheckedChange={(v) => dispatch(setSetting({ key: 'plateRedaction', value: v }))} aria-label="License plate redaction" />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <b className="text-[12.5px] font-[550] block">Night-mode enhancement</b>
-                  <span className="text-[11px] text-muted">Boost contrast for low-light footage</span>
-                </div>
-                <Switch checked={nightMode} onCheckedChange={(v) => dispatch(setSetting({ key: 'nightMode', value: v }))} aria-label="Night-mode enhancement" />
               </div>
             </div>
 

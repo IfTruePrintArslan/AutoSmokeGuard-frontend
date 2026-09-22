@@ -3,6 +3,13 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { logout } from '../../features/auth/authSlice'
 import { closeMobileNav, toggleSidebarCollapse } from '../../features/ui/uiSlice'
+import { selectActiveJobCount } from '../../features/analysis/analysisSlice'
+import useMediaQuery from '../../hooks/useMediaQuery'
+
+// Below this width the sidebar is an off-canvas drawer (see the
+// `min-[769px]:` Tailwind breakpoints used throughout this file); at or
+// above it, it's the always-visible static rail.
+const DRAWER_MEDIA_QUERY = '(max-width: 768px)'
 
 /* ---------- SVG Icons (verbatim from 02_dashboard.html, JSX-ified) ---------- */
 
@@ -144,16 +151,21 @@ function SideNavLink({ to, icon, children, badge, onNavigate, collapsed }) {
 }
 
 /* ---------- Sidebar ---------- */
-const TERMINAL_STATUSES = new Set(['done', 'failed'])
-
 export default function Sidebar() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const user = useSelector((state) => state.auth.user)
   const mobileNavOpen = useSelector((state) => state.ui.mobileNavOpen)
   const collapsed = useSelector((state) => state.ui.sidebarCollapsed)
-  const polling = useSelector((state) => state.analysis.polling)
-  const activeCount = Object.values(polling).filter((j) => !TERMINAL_STATUSES.has(j.status)).length
+  // Goes through the shared selector — hand-rolling this filter here (and
+  // separately in AnalysisPage) is what produced a phantom "N running"
+  // badge that never matched what was actually still in flight.
+  const activeCount = useSelector(selectActiveJobCount)
+  const isDrawerViewport = useMediaQuery(DRAWER_MEDIA_QUERY)
+  // Only ever true for the off-canvas drawer, closed, on a narrow viewport —
+  // never on the always-visible desktop rail, which ignores `mobileNavOpen`
+  // entirely and must stay fully interactive regardless of this value.
+  const drawerClosed = isDrawerViewport && !mobileNavOpen
 
   const closeNav = () => dispatch(closeMobileNav())
 
@@ -188,6 +200,14 @@ export default function Sidebar() {
 
   return (
     <aside
+      // A closed off-canvas drawer is still in the DOM (it's animated via
+      // transform, not unmounted), so without this it stays fully focusable
+      // and in the tab order while invisible off-screen. `inert` removes it
+      // from the tab order and blocks interaction; `aria-hidden` is the
+      // fallback for browsers/AT that don't honour `inert`. Never applied on
+      // the desktop rail, which must stay reachable at all times.
+      inert={drawerClosed ? true : undefined}
+      aria-hidden={drawerClosed}
       className={[
         // Base: always full width; on ≥769px collapsed → shrink to rail
         'flex flex-col flex-shrink-0 py-5',

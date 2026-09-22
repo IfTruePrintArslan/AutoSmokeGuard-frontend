@@ -5,6 +5,8 @@ import {
   ComposedChart,
   Area,
   Line,
+  Bar,
+  BarChart,
   CartesianGrid,
   XAxis,
   YAxis,
@@ -17,8 +19,11 @@ import SeverityBadge from '../components/ui/SeverityBadge'
 import Skeleton from '../components/ui/Skeleton'
 import ErrorState from '../components/ui/ErrorState'
 import EmptyState from '../components/ui/EmptyState'
+import InfoTooltip from '../components/ui/InfoTooltip'
 import usePolling from '../hooks/usePolling'
 import { fetchStats } from '../features/dashboard/dashboardSlice'
+import { summarizeDetectionSeries } from '../lib/dashboardTrend'
+import { VEHICLE_DETECTIONS_LABEL, VEHICLE_DETECTIONS_TOOLTIP_TEXT } from '../lib/copy'
 
 const TERMINAL_STATUSES = new Set(['done', 'failed'])
 
@@ -127,6 +132,7 @@ export default function DashboardPage() {
 
   const { totals, sparklines, detections_over_time, severity_distribution, recent_analyses, processing_queue } = data
   const isBrandNew = (totals?.analyses ?? 0) === 0 && (recent_analyses?.length ?? 0) === 0
+  const trend = summarizeDetectionSeries(detections_over_time)
 
   const severityTotal = (severity_distribution || []).reduce((sum, e) => sum + e.value, 0)
   const activeQueueCount = (processing_queue || []).filter((i) => !TERMINAL_STATUSES.has(i.status)).length
@@ -188,13 +194,53 @@ export default function DashboardPage() {
             <div className="card flex flex-col">
               <div className="card-head">
                 <div>
-                  <h3>Detections over time</h3>
-                  <div className="sub">Vehicles flagged per day</div>
+                  <h3 className="inline-flex items-center gap-1.5">
+                    <span>Detections over time</span>
+                    <InfoTooltip label="What does this chart count?">
+                      {VEHICLE_DETECTIONS_TOOLTIP_TEXT}
+                    </InfoTooltip>
+                  </h3>
+                  <div className="sub">Vehicle detections per day</div>
                 </div>
               </div>
-              <div className="w-[calc(100%-36px)] h-[300px] mt-3.5 mx-[18px]">
-                {(detections_over_time || []).length === 0 ? (
+
+              {trend.isSparse && (
+                <div className="mx-[18px] mt-3.5 rounded-[9px] border border-line-2 bg-bg-2 px-3 py-2.5 text-[12px] text-text-2">
+                  <span className="font-semibold text-text">Not enough history yet</span>
+                  {' — '}
+                  {trend.activeDays.length === 1 ? (
+                    <>
+                      all <span className="mono font-semibold text-text">{trend.totalDetections}</span> detection
+                      {trend.totalDetections === 1 ? '' : 's'} so far happened on{' '}
+                      <span className="font-semibold text-text">{trend.activeDays[0].label}</span>.
+                    </>
+                  ) : (
+                    <>
+                      only <span className="mono font-semibold text-text">{trend.activeDays.length}</span> days in this range have any activity so far.
+                    </>
+                  )}
+                  {' '}The trend line will fill in as more days of history accumulate.
+                </div>
+              )}
+
+              <div className={`w-[calc(100%-36px)] h-[300px] mx-[18px] ${trend.isSparse ? 'mt-2.5' : 'mt-3.5'}`}>
+                {trend.isEmpty ? (
                   <div className="h-full flex items-center justify-center text-[12.5px] text-muted">No detections in this range.</div>
+                ) : trend.isSparse ? (
+                  // Bars, not a smoothed line — a sparse series (activity on
+                  // only one or two days) rendered as a line/area reads as a
+                  // flat-lined, broken chart with a single hairline spike.
+                  // Discrete bars make the same real data look intentional.
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={detections_over_time} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+                      <CartesianGrid vertical={false} stroke="#232323" />
+                      <XAxis dataKey="label" hide />
+                      <YAxis hide />
+                      <Tooltip content={<CustomLineTooltip />} cursor={{ fill: 'rgba(250,250,250,0.05)' }} />
+                      <Bar dataKey="detections" fill="#fafafa" radius={[3, 3, 0, 0]} maxBarSize={26} />
+                      <Bar dataKey="high" fill="#f87171" radius={[3, 3, 0, 0]} maxBarSize={10} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={detections_over_time} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
@@ -258,18 +304,27 @@ export default function DashboardPage() {
                     <tbody>
                       <tr>
                         <th>Source</th>
-                        <th>Vehicles</th>
+                        <th>
+                          <span className="inline-flex items-center gap-1.5">
+                            {VEHICLE_DETECTIONS_LABEL}
+                            <InfoTooltip label={`What does "${VEHICLE_DETECTIONS_LABEL}" mean?`}>
+                              {VEHICLE_DETECTIONS_TOOLTIP_TEXT}
+                            </InfoTooltip>
+                          </span>
+                        </th>
                         <th>Confidence</th>
                         <th>Severity</th>
                         <th></th>
                       </tr>
                       {recent_analyses.map((row) => (
                         <tr key={row.analysis_id}>
-                          <td><div className="thumb"></div></td>
                           <td>
-                            <b style={{ fontWeight: 560 }}>{row.total_vehicles ?? 0}</b>
-                            <div className="text-[11.5px] text-muted mt-0.5 truncate max-w-[160px]">{row.media?.filename}</div>
+                            <div className="flex items-center gap-3">
+                              <div className="thumb"></div>
+                              <div className="text-[13px] font-[550] truncate max-w-[160px]">{row.media?.filename}</div>
+                            </div>
                           </td>
+                          <td className="mono">{row.total_vehicles ?? 0}</td>
                           <td className="mono">{row.avg_confidence != null ? row.avg_confidence.toFixed(2) : '—'}</td>
                           <td>{row.overall_severity ? <SeverityBadge severity={row.overall_severity} /> : '—'}</td>
                           <td><Link className="link" to={`/analysis/${row.analysis_id}`}>View</Link></td>

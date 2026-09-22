@@ -7,6 +7,7 @@ import reducer, {
   resetFilters,
   setPage,
   setPageSize,
+  selectHistoryFallbackPage,
 } from '../historySlice'
 import * as api from '../../../lib/api'
 
@@ -109,5 +110,106 @@ describe('historySlice thunks', () => {
     expect(fetchHistory.rejected.match(result)).toBe(true)
     expect(store.getState().history.status).toBe('rejected')
     expect(store.getState().history.error).toBe('Boom.')
+  })
+})
+
+/* ───────── D13: deleting the last row on a page must not leave it ──────── */
+describe('historySlice out-of-range pages (D13)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  // 11 rows, page size 10: page 2 holds exactly one row. Deleting it and
+  // refetching ?page=2 makes DRF raise NotFound -> 404.
+  async function loadLastPageThenDeleteIt(store) {
+    api.apiGet.mockResolvedValueOnce({
+      count: 11,
+      page: 2,
+      pages: 2,
+      page_size: 10,
+      results: [{ analysis_id: 'doomed' }],
+    })
+    await store.dispatch(fetchHistory({ page: 2, page_size: 10 }))
+
+    api.apiGet.mockRejectedValueOnce(
+      new api.ApiError({ status: 404, code: 'not_found', detail: 'Invalid page.' })
+    )
+    await store.dispatch(fetchHistory({ page: 2, page_size: 10 }))
+  }
+
+  it('clears the stale rows instead of re-rendering the row that was just deleted', async () => {
+    const store = createTestStore()
+    await loadLastPageThenDeleteIt(store)
+
+    const state = store.getState().history
+    // The deleted row must be gone — leaving it rendered under a green
+    // "Analysis deleted." toast, with a View link that 404s, is the bug.
+    expect(state.items).toEqual([])
+    expect(state.status).toBe('rejected')
+  })
+
+  it('exposes the page the component should clamp to', async () => {
+    const store = createTestStore()
+    await loadLastPageThenDeleteIt(store)
+
+    const state = store.getState().history
+    expect(state.pageOutOfRange).toBe(true)
+    expect(state.pages).toBe(1)
+    expect(selectHistoryFallbackPage(store.getState())).toBe(1)
+  })
+
+  it('clears the out-of-range flag as soon as the clamped refetch starts', async () => {
+    const store = createTestStore()
+    await loadLastPageThenDeleteIt(store)
+    expect(store.getState().history.pageOutOfRange).toBe(true)
+
+    store.dispatch(setPage(1))
+    api.apiGet.mockResolvedValueOnce({
+      count: 10,
+      page: 1,
+      pages: 1,
+      page_size: 10,
+      results: Array.from({ length: 10 }, (_, i) => ({ analysis_id: `a${i}` })),
+    })
+    await store.dispatch(fetchHistory({ page: 1, page_size: 10 }))
+
+    const state = store.getState().history
+    expect(state.pageOutOfRange).toBe(false)
+    expect(state.items).toHaveLength(10)
+    expect(selectHistoryFallbackPage(store.getState())).toBeNull()
+  })
+
+  it('leaves the rows alone for an ordinary transport failure', async () => {
+    const store = createTestStore()
+    api.apiGet.mockResolvedValueOnce({
+      count: 1,
+      page: 1,
+      pages: 1,
+      page_size: 10,
+      results: [{ analysis_id: 'a1' }],
+    })
+    await store.dispatch(fetchHistory({ page: 1, page_size: 10 }))
+
+    api.apiGet.mockRejectedValueOnce(
+      new api.ApiError({ status: 0, code: 'network_error', detail: 'Network error.' })
+    )
+    await store.dispatch(fetchHistory({ page: 1, page_size: 10 }))
+
+    // A dropped request says nothing about what exists — keep showing what
+    // we last knew, and do not ask the page to clamp anywhere.
+    expect(store.getState().history.items).toHaveLength(1)
+    expect(store.getState().history.pageOutOfRange).toBe(false)
+    expect(selectHistoryFallbackPage(store.getState())).toBeNull()
+  })
+
+  it('never asks page 1 to clamp below itself', async () => {
+    const store = createTestStore()
+    api.apiGet.mockRejectedValueOnce(
+      new api.ApiError({ status: 404, code: 'not_found', detail: 'Invalid page.' })
+    )
+    await store.dispatch(fetchHistory({ page: 1, page_size: 10 }))
+
+    expect(store.getState().history.pages).toBe(1)
+    expect(selectHistoryFallbackPage(store.getState())).toBeNull()
   })
 })

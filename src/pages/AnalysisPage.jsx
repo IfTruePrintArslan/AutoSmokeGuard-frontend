@@ -8,19 +8,47 @@ import {
   fetchAnalysis,
   generateReport,
   startAnalysis,
+  isTerminalStatus,
+  selectActiveJobs,
+  selectActiveJobIds,
+  prunePolling,
+  selectPollConnectionLost,
+  selectPollError,
+  clearPollError,
 } from '../features/analysis/analysisSlice'
 import { fetchHistory } from '../features/history/historySlice'
 import { pushToast } from '../features/ui/uiSlice'
+import { useModalFocusTrap } from '../hooks/useModalFocusTrap'
 import SeverityDistribution from '../components/SeverityDistribution'
 import SeverityBadge from '../components/ui/SeverityBadge'
 import Spinner from '../components/ui/Spinner'
 import Skeleton from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
 import ErrorState from '../components/ui/ErrorState'
+import InfoTooltip from '../components/ui/InfoTooltip'
 import { apiDownload, mediaUrl } from '../lib/api'
 import { severityCountsToDistribution } from '../lib/severity'
+import { nextReportPollDelayMs, reportBudgetRemainingMs } from '../lib/reportBudget'
+import { reportStatusOf, serverIsGeneratingReport, serverHasNoReportComing } from '../lib/reportStatus'
+import { VEHICLE_DETECTIONS_LABEL, VEHICLE_DETECTIONS_TOOLTIP_TEXT } from '../lib/copy'
 
-const TERMINAL_STATUSES = new Set(['done', 'failed'])
+function ordinalSuffix(n) {
+  const j = n % 10
+  const k = n % 100
+  if (j === 1 && k !== 11) return 'st'
+  if (j === 2 && k !== 12) return 'nd'
+  if (j === 3 && k !== 13) return 'rd'
+  return 'th'
+}
+
+// `frame_sample_rate` from `settings_snapshot` -> "every 5th frame" (or
+// "every frame" for the rate=1 case) — the sampling context shown next to
+// the vehicle-detections stat so the raw count is interpretable.
+function fmtSampleRate(rate) {
+  if (rate === null || rate === undefined) return null
+  if (rate <= 1) return 'every frame'
+  return `every ${rate}${ordinalSuffix(rate)} frame`
+}
 
 function fmtSeconds(sec) {
   if (sec === null || sec === undefined) return '—'
@@ -56,22 +84,25 @@ function useElapsed(startedAt, active) {
 
 /* ───────────────────────── Frame lightbox ───────────────────────── */
 function FrameLightbox({ frames, index, setIndex, onClose }) {
+  // Escape + focus-in/Tab-trap/focus-restore are handled by the shared hook;
+  // only the arrow-key frame navigation is unique to this dialog.
+  const dialogRef = useModalFocusTrap(true, onClose)
+
   useEffect(() => {
     function onKeyDown(e) {
-      if (e.key === 'Escape') onClose()
-      else if (e.key === 'ArrowRight') setIndex((i) => Math.min(i + 1, frames.length - 1))
+      if (e.key === 'ArrowRight') setIndex((i) => Math.min(i + 1, frames.length - 1))
       else if (e.key === 'ArrowLeft') setIndex((i) => Math.max(i - 1, 0))
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [frames.length, setIndex, onClose])
+  }, [frames.length, setIndex])
 
   if (!frames.length) return null
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Annotated frame viewer">
       <div className="absolute inset-0 bg-black/85" aria-hidden="true" onClick={onClose} />
-      <div className="relative max-w-[min(90vw,900px)] max-h-[85vh] flex flex-col items-center gap-3">
+      <div ref={dialogRef} tabIndex={-1} className="relative max-w-[min(90vw,900px)] max-h-[85vh] flex flex-col items-center gap-3">
         <img
           src={mediaUrl(frames[index])}
           alt={`Annotated frame ${index + 1} of ${frames.length}`}
@@ -107,12 +138,29 @@ function FrameLightbox({ frames, index, setIndex, onClose }) {
   )
 }
 
+// Polls a single tracked job's status. Renders nothing — `usePolling` (now
+// hardened against duplicate/overlapping chains, see the hook itself) does
+// all the work and its own cleanup on unmount, so mounting/unmounting one of
+// these per active job id is enough to start and stop polling exactly with
+// the set of jobs actually in flight.
+function JobPoller({ jobId }) {
+  usePolling(pollStatus, jobId, {
+    isDone: (result) => isTerminalStatus(result?.payload?.status),
+  })
+  return null
+}
+
 /* ───────────────────────── Index (list) view ───────────────────────── */
 function AnalysisIndexView() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const { items, status, error } = useSelector((s) => s.history)
-  const polling = useSelector((s) => s.analysis.polling)
+  // Every active job gets its OWN poller (below) — without this, jobs
+  // started/observed elsewhere in the SPA session sit in `polling` with no
+  // live view ever refreshing their status, so a completed job's badge/entry
+  // here can go stale indefinitely (the "sidebar says 3 running forever" bug).
+  const inFlight = useSelector(selectActiveJobs)
+  const activeJobIds = useSelector(selectActiveJobIds)
 
   const load = useCallback(() => {
     dispatch(fetchHistory({ page: 1, page_size: 20, ordering: '-created_at' }))
@@ -122,10 +170,18 @@ function AnalysisIndexView() {
     load()
   }, [load])
 
-  const inFlight = Object.values(polling).filter((j) => !TERMINAL_STATUSES.has(j.status))
+  // One-time sweep of anything already terminal from a previous session/tab
+  // so a stale entry can never inflate the "N active" count on first paint.
+  useEffect(() => {
+    dispatch(prunePolling())
+  }, [dispatch])
 
   return (
     <div className="flex flex-col">
+      {/* Invisible — one live poller per active job, so this view (unlike
+          the old version) actually keeps their status moving. */}
+      {activeJobIds.map((id) => <JobPoller key={id} jobId={id} />)}
+
       <div className="page-head">
         <div>
           <h1>Live Analysis</h1>
@@ -194,7 +250,14 @@ function AnalysisIndexView() {
                   <tbody>
                     <tr>
                       <th>Source</th>
-                      <th>Vehicles</th>
+                      <th>
+                        <span className="inline-flex items-center gap-1.5">
+                          {VEHICLE_DETECTIONS_LABEL}
+                          <InfoTooltip label={`What does "${VEHICLE_DETECTIONS_LABEL}" mean?`}>
+                            {VEHICLE_DETECTIONS_TOOLTIP_TEXT}
+                          </InfoTooltip>
+                        </span>
+                      </th>
                       <th>Confidence</th>
                       <th>Severity</th>
                       <th>Status</th>
@@ -251,12 +314,20 @@ function AnalysisDetailView({ analysisId }) {
   // GET /api/analysis/{id} carries.
   const job = pollingMap[analysisId] || null
   const liveStatus = job?.status || detail?.status
-  const isTerminal = liveStatus ? TERMINAL_STATUSES.has(liveStatus) : false
+  const isTerminal = liveStatus ? isTerminalStatus(liveStatus) : false
   const isRunning = liveStatus && !isTerminal
 
   usePolling(pollStatus, isTerminal ? null : analysisId, {
-    isDone: (result) => TERMINAL_STATUSES.has(result?.payload?.status),
+    isDone: (result) => isTerminalStatus(result?.payload?.status),
   })
+
+  // Transport-level poll failures (dropped Wi-Fi, a 429, a mid-deploy 502)
+  // accumulate separately from `status` — polling itself never stops on
+  // these, so once the failures cross the threshold this is a recoverable
+  // "connection problem", never the terminal "Analysis failed" panel below
+  // (which must now mean only a genuine server-side failure).
+  const connectionLost = useSelector(selectPollConnectionLost(analysisId))
+  const pollError = useSelector(selectPollError(analysisId))
 
   // Full detail: fetched once up front so the media/filename render even
   // while still running, and again whenever the polled status flips
@@ -270,6 +341,108 @@ function AnalysisDetailView({ analysisId }) {
       dispatch(fetchAnalysis(analysisId))
     }
   }, [dispatch, analysisId, job, isTerminal])
+
+  // ── Report state: the server's signal first, its budget as the ceiling ──
+  // `auto_generate_pdf` analyses flip to a terminal status slightly before
+  // the server has finished writing the report, so `detail.report` is still
+  // null for a window after the one-shot refetch above lands. Showing
+  // "Generate PDF report" during that window would be a lie — it offers the
+  // user a button for work already in flight, and pressing it forces a
+  // duplicate render — so the hero shows a disabled "Preparing report…"
+  // instead, and this loop keeps refetching until the report appears.
+  //
+  // Two things decide how long that lasts, in this order:
+  //
+  // 1. `detail.report_status` — the server saying outright what it is doing
+  //    (lib/reportStatus.js). `failed` and `skipped` mean nothing is coming,
+  //    so the manual fallback is owed IMMEDIATELY. That is the case a clock
+  //    cannot see: a render that dies at 2s is indistinguishable from one
+  //    still going, and waiting out the budget for it means twenty-eight
+  //    seconds of spinner for work that is already over.
+  // 2. The wall-clock budget — REPORT_BUDGET_SECONDS (30s), the server's own
+  //    UC-07 render budget, mirrored in lib/reportBudget.js. It remains the
+  //    ceiling on patience in every case: it is the whole story against a
+  //    server too old to send `report_status`, and it still bounds a signal
+  //    that has gone stale (a worker killed mid-render leaves `generating`
+  //    on the row forever, and no field can un-say that by itself).
+  //
+  // lib/reportBudget.js also explains why the deadline is anchored on when
+  // the run *finished on the server* rather than on when this tab opened.
+  //
+  // (The route entry point below keys this component by `analysisId`, so all
+  // of this state starts fresh whenever the viewed analysis changes — no
+  // manual reset needed here.)
+  const [reportBudgetExhausted, setReportBudgetExhausted] = useState(false)
+
+  const reportReady = !!detail?.report?.report_id
+  const autoPdfSnapshot = !!detail?.settings_snapshot?.auto_generate_pdf
+  // A primitive, deliberately: the poll below must not restart every time a
+  // refetch hands back a new `detail` object carrying the same finish time.
+  const reportFinishedAt = detail?.end_time || detail?.created_at || null
+
+  // `null` for a server that does not send the field, or sends a word this
+  // build does not know — both fall back to the budget-only reasoning below.
+  const reportSignal = reportStatusOf(detail)
+
+  // While the server is still working the results view shows a disabled
+  // "Preparing report…" instead of the manual "Generate PDF report" button,
+  // and keeps polling for the PDF. Read as: there is no report yet, the
+  // server has not said it gave up, and either it says it is rendering or
+  // this run asked for a PDF and the budget has not run out.
+  const preparingReport =
+    isTerminal &&
+    !reportReady &&
+    !serverHasNoReportComing(reportSignal) &&
+    (serverIsGeneratingReport(reportSignal) || autoPdfSnapshot) &&
+    !reportBudgetExhausted
+
+  useEffect(() => {
+    // Exactly the state the hero is showing: the poll exists to leave it.
+    // Gating on the same expression is what stops the client burning ~10
+    // requests over 30s against a server that has already said `failed`.
+    if (!preparingReport) return undefined
+
+    // The chain drives itself off its own timer rather than off `detail`
+    // changing identity. That matters: a refetch that *fails* (a dropped
+    // connection, a 429) leaves `detail` untouched, and a loop that waited
+    // for it to change would silently die there — stranding the hero on
+    // "Preparing report…" forever, with the manual fallback unreachable.
+    let cancelled = false
+    let attempt = 0
+    let timer = null
+    const deadline = Date.now() + reportBudgetRemainingMs(reportFinishedAt)
+
+    // The server has had its full budget and produced nothing, so the manual
+    // button is now the honest state. Flipped from a timer rather than
+    // straight from the effect body on purpose: a synchronous setState there
+    // triggers a cascading render (react-hooks/set-state-in-effect).
+    const expire = () => {
+      if (!cancelled) setReportBudgetExhausted(true)
+    }
+
+    const schedule = () => {
+      if (cancelled) return
+      const left = deadline - Date.now()
+      if (left <= 0) {
+        timer = setTimeout(expire, 0)
+        return
+      }
+      timer = setTimeout(tick, Math.min(nextReportPollDelayMs(attempt++), left))
+    }
+
+    async function tick() {
+      if (cancelled) return
+      await dispatch(fetchAnalysis(analysisId))
+      schedule()
+    }
+
+    schedule()
+
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [preparingReport, reportFinishedAt, analysisId, dispatch])
 
   const startedAt = job?.started_at || detail?.start_time || detail?.created_at
   const elapsed = useElapsed(startedAt, isRunning)
@@ -335,6 +508,25 @@ function AnalysisDetailView({ analysisId }) {
           <h2 className="text-[15px] font-semibold">{detail.media?.filename}</h2>
           <p className="text-[12.5px] text-text-2 mt-1">{stage}…</p>
 
+          {connectionLost && (
+            <div
+              role="alert"
+              className="mt-4 w-full max-w-[420px] rounded-[9px] border border-mod/30 bg-mod-bg px-3 py-2.5 text-[12px] text-mod flex items-center justify-between gap-3"
+            >
+              <span>
+                Losing the connection to check on this analysis{pollError?.detail ? ` (${pollError.detail})` : ''}.
+                It is still running on the server — this is just the status check.
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost shrink-0"
+                onClick={() => dispatch(clearPollError(analysisId))}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           <div className="w-full max-w-[420px] mt-6">
             <div
               className="h-2.5 rounded-[99px] bg-[rgba(148,163,184,0.12)] overflow-hidden"
@@ -389,6 +581,7 @@ function AnalysisDetailView({ analysisId }) {
   const severityData = severityCountsToDistribution(detail.severity_counts)
   const severityTotal = severityData.reduce((sum, e) => sum + e.value, 0)
   const frames = detail.annotated_frames || []
+  const sampleRateText = fmtSampleRate(detail.settings_snapshot?.frame_sample_rate)
 
   return (
     <div className="flex flex-col gap-4">
@@ -403,6 +596,11 @@ function AnalysisDetailView({ analysisId }) {
             {detail.report?.report_id ? (
               <button type="button" className="btn btn-pri" onClick={handleDownload}>
                 Download PDF
+              </button>
+            ) : preparingReport ? (
+              <button type="button" className="btn btn-pri" disabled aria-busy="true">
+                <Spinner size={14} />
+                <span role="status">Preparing report…</span>
               </button>
             ) : (
               <button type="button" className="btn btn-pri" disabled={generating} onClick={handleGenerateReport}>
@@ -435,8 +633,19 @@ function AnalysisDetailView({ analysisId }) {
 
       {/* Stat row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="card py-4 px-[18px]">
+          <div className="flex items-center gap-1.5 text-[12px] text-text-2">
+            <span>{VEHICLE_DETECTIONS_LABEL}</span>
+            <InfoTooltip label={`What does "${VEHICLE_DETECTIONS_LABEL}" mean?`}>
+              {VEHICLE_DETECTIONS_TOOLTIP_TEXT}
+            </InfoTooltip>
+          </div>
+          <div className="mono text-[20px] font-[650] tracking-[-0.02em] mt-1.5">{detail.total_vehicles ?? 0}</div>
+          <div className="text-[10.5px] text-muted mt-1">
+            {detail.frames_processed ?? '—'} frames processed{sampleRateText ? ` · ${sampleRateText}` : ''}
+          </div>
+        </div>
         {[
-          ['Vehicles detected', detail.total_vehicles ?? 0],
           ['Smoke regions', detail.total_smoke ?? smokeCount],
           ['Avg. confidence', detail.avg_confidence != null ? detail.avg_confidence.toFixed(2) : '—'],
           ['Frames processed', detail.frames_processed ?? '—'],
@@ -460,11 +669,11 @@ function AnalysisDetailView({ analysisId }) {
         <div className="card overflow-hidden">
           <div className="card-head">
             <h3>Detections</h3>
-            <span className="sub">{vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''}</span>
+            <span className="sub">{vehicles.length} detection{vehicles.length !== 1 ? 's' : ''}</span>
           </div>
           <div className="overflow-x-auto">
             {vehicles.length === 0 ? (
-              <EmptyState title="No vehicles detected" description="This analysis did not find any vehicles in the media." />
+              <EmptyState title="No vehicle detections" description="This analysis did not record any vehicle detections in the media." />
             ) : (
               <table>
                 <tbody>
@@ -497,7 +706,7 @@ function AnalysisDetailView({ analysisId }) {
           total={severityTotal}
           title="Severity breakdown"
           subtitle="This analysis"
-          unitLabel="vehicles"
+          unitLabel="detections"
         />
       </div>
 
@@ -528,7 +737,10 @@ export default function AnalysisPage() {
         </div>
         <Link className="link" to="/analysis">← All analyses</Link>
       </div>
-      <AnalysisDetailView analysisId={analysisId} />
+      {/* `key` forces a full remount per analysis, so per-analysis local
+          state (lightbox, report-polling attempts, etc.) always starts
+          fresh — React Router does not remount on a param-only change. */}
+      <AnalysisDetailView key={analysisId} analysisId={analysisId} />
     </div>
   )
 }

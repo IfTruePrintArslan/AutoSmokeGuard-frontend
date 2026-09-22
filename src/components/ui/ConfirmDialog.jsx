@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useModalFocusTrap } from '../../hooks/useModalFocusTrap'
 
 // Hand-rolled focus-trapping confirm dialog — no Radix Dialog is installed,
-// so this implements the minimum accessible modal contract itself: Esc to
-// close, Tab/Shift+Tab wrap inside the dialog, focus restored on close.
+// so this implements the minimum accessible modal contract itself (via the
+// shared `useModalFocusTrap` hook): Esc to close, Tab/Shift+Tab wrap inside
+// the dialog even while its controls are disabled, focus restored on close.
 export default function ConfirmDialog({
   open,
   title,
@@ -15,48 +16,7 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }) {
-  const dialogRef = useRef(null)
-  const previouslyFocused = useRef(null)
-
-  useEffect(() => {
-    if (!open) return undefined
-
-    previouslyFocused.current = document.activeElement
-
-    function getFocusable() {
-      return dialogRef.current?.querySelectorAll(
-        'button:not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      )
-    }
-    getFocusable()?.[0]?.focus()
-
-    function onKeyDown(e) {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onCancel?.()
-        return
-      }
-      if (e.key === 'Tab') {
-        const focusable = getFocusable()
-        if (!focusable || !focusable.length) return
-        const first = focusable[0]
-        const last = focusable[focusable.length - 1]
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault()
-          last.focus()
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault()
-          first.focus()
-        }
-      }
-    }
-
-    document.addEventListener('keydown', onKeyDown, true)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown, true)
-      if (previouslyFocused.current?.focus) previouslyFocused.current.focus()
-    }
-  }, [open, onCancel])
+  const dialogRef = useModalFocusTrap(open, onCancel)
 
   if (!open) return null
 
@@ -65,6 +25,7 @@ export default function ConfirmDialog({
       <div className="absolute inset-0 bg-black/60" aria-hidden="true" onClick={busy ? undefined : onCancel} />
       <div
         ref={dialogRef}
+        tabIndex={-1}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
