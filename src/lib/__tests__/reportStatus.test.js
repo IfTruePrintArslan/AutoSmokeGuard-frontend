@@ -17,9 +17,50 @@ import {
 // added to replace, silently and with no error anywhere. So the mirror is
 // checked against the source of truth rather than trusted.
 //
-// Vitest runs with the frontend project root as cwd; the backend is its
-// sibling (the e2e fixtures already depend on that same layout).
-const MODELS_PY = resolve(process.cwd(), '../backend/analysis/models.py')
+// Finding the backend (it is a *different repository*)
+// ----------------------------------------------------
+// frontend/ is its own git repo, so a standalone checkout — which is how CI
+// clones it, and how the README tells collaborators to work — has no sibling
+// backend/ at all. Resolving `../backend/...` and nothing else only ever
+// worked because the author's frontend/ happens to sit inside FYP/; on a
+// runner it was a hard ENOENT.
+//
+// Deleting this guard was not an option (it is the only thing that catches
+// the server growing a sixth state this client would silently ignore), and
+// neither was an unconditional skip, which is green while verifying nothing.
+// So the backend is *searched for* in the places it legitimately lives, and
+// when it genuinely is not there the test skips with a message that names
+// what was missing and how to supply it.
+const BACKEND_ENV_VAR = 'ASG_BACKEND_PATH'
+
+/** Every plausible root of the backend repo, most specific first. */
+function backendRoots() {
+  const override = (process.env[BACKEND_ENV_VAR] ?? '').trim()
+  return [
+    ...(override ? [resolve(override)] : []),
+    resolve(process.cwd(), '_backend'), // sibling checkout made by CI
+    resolve(process.cwd(), '../backend'), // umbrella working copy (FYP/)
+    resolve(process.cwd(), '../_backend'),
+  ]
+}
+
+/** The first root that actually contains `relativePath`, or null. */
+function findInBackend(relativePath) {
+  return backendRoots().map((root) => resolve(root, relativePath)).find(existsSync) ?? null
+}
+
+/** An explicit "missing input, not a pass" note for the skip. */
+function missingBackendNote(relativePath) {
+  return (
+    `MISSING INPUT (this is not a pass): backend/${relativePath} was not found, so the ` +
+    'report-status drift guard could not run. It lives in the backend repository ' +
+    '(IfTruePrintArslan/AutoSmokeGuard-backend), not in this one, so a standalone frontend ' +
+    `checkout does not contain it. Looked in: ${backendRoots().join('; ')}. Set ` +
+    `${BACKEND_ENV_VAR} to the backend checkout root to make this guard run.`
+  )
+}
+
+const MODELS_PY_RELATIVE = 'analysis/models.py'
 
 /** `{REPORT_PENDING: 'pending', ...}` as literally written in the model. */
 function serverConstants(source) {
@@ -39,13 +80,9 @@ function serverVocabulary(source) {
 }
 
 describe('report status — parity with the server', () => {
-  it('mirrors backend REPORT_STATUS_CHOICES exactly', () => {
-    expect(
-      existsSync(MODELS_PY),
-      `Cannot verify the report-status mirror: ${MODELS_PY} was not found. ` +
-        'This test reads the server vocabulary on purpose — if the backend has moved, ' +
-        'point this path at its new home rather than deleting the check.'
-    ).toBe(true)
+  it('mirrors backend REPORT_STATUS_CHOICES exactly', (ctx) => {
+    const MODELS_PY = findInBackend(MODELS_PY_RELATIVE)
+    ctx.skip(MODELS_PY === null, missingBackendNote(MODELS_PY_RELATIVE))
 
     const vocabulary = serverVocabulary(readFileSync(MODELS_PY, 'utf-8'))
 
@@ -58,9 +95,12 @@ describe('report status — parity with the server', () => {
     ).toEqual([...REPORT_STATUS_VALUES].sort())
   })
 
-  it('agrees with the server on the two values that end the wait', () => {
+  it('agrees with the server on the two values that end the wait', (ctx) => {
     // These are the states the whole feature turns on: the client stops
     // waiting early only because the server said one of them.
+    const MODELS_PY = findInBackend(MODELS_PY_RELATIVE)
+    ctx.skip(MODELS_PY === null, missingBackendNote(MODELS_PY_RELATIVE))
+
     const vocabulary = serverVocabulary(readFileSync(MODELS_PY, 'utf-8'))
     expect(vocabulary).toContain(REPORT_STATUS.FAILED)
     expect(vocabulary).toContain(REPORT_STATUS.SKIPPED)
