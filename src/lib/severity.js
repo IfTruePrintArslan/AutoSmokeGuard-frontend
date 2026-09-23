@@ -18,6 +18,7 @@ export function sevClass(severity) {
 }
 
 export function sevLabel(severity) {
+  if (severity === 'none') return 'None'
   return SEVERITY_LABELS[severity] || severity || 'Unknown'
 }
 
