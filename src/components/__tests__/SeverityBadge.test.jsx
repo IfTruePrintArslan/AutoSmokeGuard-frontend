@@ -22,4 +22,9 @@ describe('SeverityBadge', () => {
     render(<SeverityBadge severity={null} />)
     expect(screen.getByText('Unknown')).toBeInTheDocument()
   })
+
+  it('renders "None" when severity is "none"', () => {
+    render(<SeverityBadge severity="none" />)
+    expect(screen.getByText('None')).toBeInTheDocument()
+  })
 })

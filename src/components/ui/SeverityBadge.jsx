@@ -5,11 +5,11 @@ import { sevClass, sevLabel } from '../../lib/severity'
 // mapping (see src/lib/severity.js). Every severity pill in the app should
 // render through this component.
 export default function SeverityBadge({ severity, className }) {
-  if (!severity) {
+  if (!severity || severity === 'none') {
     return (
       <span className={cn('sev', 'bg-[rgba(148,163,184,0.12)] text-muted', className)}>
         <i className="bg-muted" />
-        Unknown
+        {severity === 'none' ? 'None' : 'Unknown'}
       </span>
     )
   }
