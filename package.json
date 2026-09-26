@@ -1,32 +1,53 @@
 {
-  "name": "vite-init",
+  "name": "autosmokeguard-frontend",
+  "description": "AI-powered vehicle smoke detection and emission reporting from uploaded images and video.",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "e2e": "playwright test"
   },
   "dependencies": {
+    "@radix-ui/react-select": "^2.3.1",
+    "@radix-ui/react-slider": "^1.4.1",
+    "@radix-ui/react-switch": "^1.3.1",
     "@reduxjs/toolkit": "^2.12.0",
     "@tailwindcss/vite": "^4.3.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-is": "^19.2.7",
     "react-redux": "^9.3.0",
     "react-router-dom": "^7.18.0",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
-    "vite": "^8.0.12"
+    "jsdom": "^29.1.1",
+    "vite": "^8.0.12",
+    "vitest": "^4.1.11"
   }
 }

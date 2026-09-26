@@ -6,8 +6,10 @@ dist-ssr/
 .vite/
 # env
 .env
-.env.*
+.env.local
+.env.*.local
 !.env.example
+!.env.development
 # logs
 *.log
 npm-debug.log*
@@ -18,3 +20,12 @@ yarn-debug.log*
 *.local
 # test
 coverage/
+
+# playwright
+e2e/__screenshots__/
+e2e/.auth/
+test-results/
+playwright-report/
+
+# claude code
+.claude/
